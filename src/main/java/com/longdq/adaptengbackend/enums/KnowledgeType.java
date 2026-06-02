@@ -1,0 +1,31 @@
+package com.longdq.adaptengbackend.enums;
+
+public enum KnowledgeType {
+    // Ngữ pháp
+    TENSES,
+    CONDITIONAL_SENTENCES,
+    RELATIVE_CLAUSES,
+    PREPOSITIONS,
+    MODAL_VERBS,
+    PASSIVE_VOICE,
+    REPORTED_SPEECH,
+    COMPARISONS,
+    ARTICLES,
+    CONJUNCTIONS,
+    GERUNDS_AND_INFINITIVES,
+    SUBJECT_VERB_AGREEMENT,
+    WORD_ORDER,
+    QUESTION_TAGS,
+
+    // Từ vựng
+    VOCABULARY,
+    PHRASAL_VERBS,
+    IDIOMS,
+    COLLOCATIONS,
+    WORD_FORMATION,
+
+    // Kỹ năng đọc hiểu
+    READING_COMPREHENSION,
+
+    OTHERS
+}
