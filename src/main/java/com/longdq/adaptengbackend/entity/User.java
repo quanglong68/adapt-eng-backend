@@ -2,6 +2,7 @@ package com.longdq.adaptengbackend.entity;
 
 
 
+import com.longdq.adaptengbackend.enums.Level;
 import jakarta.persistence.*;
 import lombok.AllArgsConstructor;
 import lombok.Data;
@@ -29,8 +30,13 @@ public class User {
     @Column(name = "full_name")
     private String fullName;
 
+    @Enumerated(EnumType.STRING)
+    @Column(name = "current_level")
+    private Level currentLevel;
+
+    @Enumerated(EnumType.STRING)
     @Column(name = "target_level")
-    private String targetLevel;
+    private Level targetLevel;
 
     @Column(name = "created_at")
     private LocalDateTime createdAt;
