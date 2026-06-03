@@ -12,7 +12,7 @@ public class QuestionTestGeneratorJob {
     private final DataSyncService dataSyncService;
     private static final int MAX_RETRY_TIMES = 6;
     //@Scheduled(initialDelay = 1000, fixedDelay = 8 * 60 * 60 * 1000)
-@Scheduled(cron = "0 0 0 5 * ?")
+@Scheduled(cron = "0 0 0 1 * ?")
 public void syncMonthlyQuestions() {
     Level[] levels = {Level.A1, Level.A2, Level.B1, Level.B2, Level.C1, Level.C2};
 
