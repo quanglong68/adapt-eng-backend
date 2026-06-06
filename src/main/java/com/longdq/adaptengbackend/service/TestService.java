@@ -13,6 +13,7 @@ import com.longdq.adaptengbackend.repository.QuestionRepository;
 import com.longdq.adaptengbackend.repository.UserLearningProgressRepository;
 import com.longdq.adaptengbackend.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 
 import java.time.LocalDateTime;
@@ -39,8 +40,7 @@ public class TestService {
     public TestSubmissionResponseDto submitTest(TestSubmissionRequestDto request) {
         int totalQuestions = request.getAnswers().size();
         int correctCount = 0;
-        User user = userRepository.findById(request.getUserId())
-                .orElseThrow(() -> new RuntimeException("User not found"));
+        User user = (User) SecurityContextHolder.getContext().getAuthentication().getPrincipal();
         List<TestSubmissionResponseDto.QuestionReviewDto> reviewList = new ArrayList<>();
         List<Question> questions = questionRepository.findAllById(request.getAnswers().stream().map(q -> q.getQuestionId()).toList());
         Map<Long, Question> questionMap = questions.stream()
@@ -122,9 +122,7 @@ public class TestService {
 
     // 3. API Chốt Level của User
     public void setUserCurrentLevel(SetLevelRequestDto request) {
-        User user = userRepository.findById(request.getUserId())
-                .orElseThrow(() -> new RuntimeException("Không tìm thấy User"));
-
+        User user = (User) SecurityContextHolder.getContext().getAuthentication().getPrincipal();
         user.setCurrentLevel(request.getSelectedLevel());
         userRepository.save(user);
     }

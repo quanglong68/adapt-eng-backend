@@ -1,33 +1,39 @@
 package com.longdq.adaptengbackend.config;
 
-
+import lombok.RequiredArgsConstructor;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.security.authentication.AuthenticationProvider;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
 import org.springframework.security.config.annotation.web.configurers.AbstractHttpConfigurer;
+import org.springframework.security.config.http.SessionCreationPolicy;
 import org.springframework.security.web.SecurityFilterChain;
+import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
 
 @Configuration
 @EnableWebSecurity
+@RequiredArgsConstructor
 public class SecurityConfig {
+
+    private final JwtAuthenticationFilter jwtAuthFilter;
+    private final AuthenticationProvider authenticationProvider;
+
     @Bean
-    public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
+    public SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
         http
-                // Tắt tính năng chống tấn công CSRF (Vì chúng ta đang dùng API Stateless, không cần thiết)
                 .csrf(AbstractHttpConfigurer::disable)
-
-                // Cấu hình phân quyền các đường link
                 .authorizeHttpRequests(auth -> auth
-                        // 1. Mở cửa hoàn toàn cho các API test AI
-                        .requestMatchers("/api/test/**").permitAll()
-
-                        // 2. Tạm thời mở cửa luôn cho các API của bạn để test cho tiện (Sau này làm chức năng Login/Token thì sẽ khóa lại sau)
-                        .requestMatchers("/api/v1/**").permitAll()
-
-                        // Các đường link khác thì bắt buộc phải đăng nhập
+                        // CHỈ THẢ CỬA cho các API liên quan đến Đăng ký, Đăng nhập
+                        .requestMatchers("/api/v1/auth/**").permitAll()
+                        // CÁC API KHÁC (bao gồm api/v1/test/**) đều bắt buộc phải có Token hợp lệ
                         .anyRequest().authenticated()
-                );
+                )
+                // JWT là Stateless (Không lưu trạng thái phiên làm việc), mỗi request là độc lập
+                .sessionManagement(sess -> sess.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
+                .authenticationProvider(authenticationProvider)
+                // Lắp trạm kiểm tra JWT vào TRƯỚC trạm kiểm tra Username/Password mặc định
+                .addFilterBefore(jwtAuthFilter, UsernamePasswordAuthenticationFilter.class);
 
         return http.build();
     }
