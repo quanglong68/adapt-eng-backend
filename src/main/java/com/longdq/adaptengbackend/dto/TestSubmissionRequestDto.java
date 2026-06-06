@@ -11,7 +11,6 @@ import java.util.UUID;
 @AllArgsConstructor
 @NoArgsConstructor
 public class TestSubmissionRequestDto {
-    private UUID userId; // Tạm dùng để test, sau này lấy từ Security Context
     private Level testedLevel;
     private List<UserAnswerDto> answers;
 
