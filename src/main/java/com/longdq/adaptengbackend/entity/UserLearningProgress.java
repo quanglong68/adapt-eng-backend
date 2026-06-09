@@ -26,6 +26,9 @@ public class UserLearningProgress {
     @JoinColumn(name = "knowledge_item_id")
     private KnowledgeItem knowledgeItem;
 
+    @Column(name = "target_word")
+    private String targetWord;
+
     @Column(name = "repetition_count")
     private Integer repetitionCount = 0;
 
