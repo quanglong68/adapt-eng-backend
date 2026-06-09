@@ -13,7 +13,10 @@ import org.hibernate.type.SqlTypes;
 import java.util.List;
 
 @Entity
-@Table(name = "questions")
+@Table(name = "questions", indexes = {
+        @Index(name = "idx_knowledge_item", columnList = "knowledge_item_id"),
+        @Index(name = "idx_target_word", columnList = "target_word")
+})
 @Data
 @NoArgsConstructor
 @AllArgsConstructor
@@ -51,4 +54,7 @@ public class Question {
 
     @Enumerated(EnumType.STRING)
     private Purpose purpose;
+
+    @Column(name = "target_word")
+    private String targetWord;
 }

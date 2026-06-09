@@ -1,22 +1,16 @@
 package com.longdq.adaptengbackend.service;
 
 import com.longdq.adaptengbackend.entity.UserLearningProgress;
-import com.longdq.adaptengbackend.repository.UserLearningProgressRepository;
-import lombok.RequiredArgsConstructor;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
 
-
-@RequiredArgsConstructor
 @Service
 public class SpacedRepetitionService {
 
-    private final UserLearningProgressRepository progressRepository;
+    // Không cần inject UserLearningProgressRepository vào đây nữa để code nhẹ hơn.
+    // Nếu bạn đang dùng nó ở hàm khác trong class này thì cứ giữ lại dòng @RequiredArgsConstructor nhé.
 
-    @Transactional
     public UserLearningProgress updateProgress(UserLearningProgress progress, boolean isCorrect) {
         if (isCorrect) {
             int currentRepetition = progress.getRepetitionCount();
@@ -43,7 +37,8 @@ public class SpacedRepetitionService {
 
         LocalDateTime nextReviewDate = LocalDateTime.now().plusDays(progress.getIntervalDays());
         progress.setNextReviewDate(nextReviewDate);
-        return progressRepository.save(progress);
-    }
 
+        // CHÌA KHÓA Ở ĐÂY: Chỉ trả về object đã được thay đổi thuộc tính trên RAM
+        return progress;
+    }
 }

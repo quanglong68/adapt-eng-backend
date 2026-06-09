@@ -2,7 +2,7 @@ package com.longdq.adaptengbackend.service;
 
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.longdq.adaptengbackend.dto.GeneratedTestQuestionDto;
+import com.longdq.adaptengbackend.dto.AIGeneratedQuestionDto;
 import com.longdq.adaptengbackend.entity.KnowledgeItem;
 import com.longdq.adaptengbackend.entity.Question;
 import com.longdq.adaptengbackend.enums.Level;
@@ -16,7 +16,6 @@ import org.springframework.transaction.annotation.Transactional;
 
 
 import java.util.List;
-import java.util.UUID;
 
 @Service
 @RequiredArgsConstructor
@@ -39,12 +38,12 @@ public class DataSyncService {
         try {
             // Sửa UNESCAPED thành UNQUOTED
             objectMapper.configure(com.fasterxml.jackson.core.JsonParser.Feature.ALLOW_UNQUOTED_CONTROL_CHARS, true);
-            List<GeneratedTestQuestionDto> dtos = objectMapper.readValue(
+            List<AIGeneratedQuestionDto> dtos = objectMapper.readValue(
                     jsonResult,
-                    new TypeReference<List<GeneratedTestQuestionDto>>() {}
+                    new TypeReference<List<AIGeneratedQuestionDto>>() {}
             );
 
-            for (GeneratedTestQuestionDto dto : dtos) {
+            for (AIGeneratedQuestionDto dto : dtos) {
 
                 KnowledgeItem knowledgeItem = knowledgeItemRepository
                         .findByKnowledgeTypeAndLevel(dto.getKnowledgeType(), level)
@@ -68,7 +67,12 @@ public class DataSyncService {
                 question.setLevel(level);
                 question.setPurpose(Purpose.TEST);
                 question.setIsAnswer(false);
-                questionRepository.save(question);
+                question.setTargetWord(dto.getTargetWord());
+                Question savedQuestion = questionRepository.save(question);
+                System.out.println("✅ [NEW QUESTION] ID: " + savedQuestion.getId() +
+                        " | Topic: " + (savedQuestion.getKnowledgeItem() != null ? savedQuestion.getKnowledgeItem().getKnowledgeName() : "N/A") +
+                        " | Word: " + (savedQuestion.getTargetWord() != null ? savedQuestion.getTargetWord() : "None") +
+                        " | Content: " + savedQuestion.getContent());
             }
 
             System.out.println("Đã lưu thành công 30 câu hỏi mới vào Database cho User!");
@@ -76,6 +80,46 @@ public class DataSyncService {
         } catch (Exception e) {
             System.err.println("Lỗi khi parse JSON hoặc lưu DB: " + e.getMessage());
             throw new RuntimeException(e);
+        }
+    }
+
+    @Transactional
+    public void generateAndSaveDailyQuestions(String promptRequirement) {
+        String jsonResult = aiService.generateDailyQuestionsForMissingItems(promptRequirement);
+        if (jsonResult == null || jsonResult.isEmpty()) throw new RuntimeException("AI không trả về JSON");
+
+        try {
+            objectMapper.configure(com.fasterxml.jackson.core.JsonParser.Feature.ALLOW_UNQUOTED_CONTROL_CHARS, true);
+            List<AIGeneratedQuestionDto> dtos = objectMapper.readValue(
+                    jsonResult, new com.fasterxml.jackson.core.type.TypeReference<List<AIGeneratedQuestionDto>>() {}
+            );
+
+            for (AIGeneratedQuestionDto dto : dtos) {
+                Question question = new Question();
+                question.setQuestionType(dto.getQuestionType());
+                question.setContent(dto.getContent());
+                question.setOptions(dto.getOptions());
+                question.setCorrectAnswer(dto.getCorrectAnswer());
+                question.setExplanation(dto.getExplanation());
+
+                if (dto.getKnowledgeId() != null) {
+                    knowledgeItemRepository.findById(dto.getKnowledgeId()).ifPresent(question::setKnowledgeItem);
+                }
+
+                question.setLevel(Level.B1);
+                question.setPurpose(Purpose.PRACTICE); // Ôn tập là PRACTICE
+                question.setIsAnswer(false);
+                question.setTargetWord(dto.getTargetWord());
+
+                Question savedQuestion = questionRepository.save(question);
+                System.out.println("✅ [NEW QUESTION] ID: " + savedQuestion.getId() +
+                        " | Topic: " + (savedQuestion.getKnowledgeItem() != null ? savedQuestion.getKnowledgeItem().getKnowledgeName() : "N/A") +
+                        " | Word: " + (savedQuestion.getTargetWord() != null ? savedQuestion.getTargetWord() : "None") +
+                        " | Content: " + savedQuestion.getContent());
+            }
+            System.out.println("Đã nhập " + dtos.size() + " câu hỏi Ôn tập!");
+        } catch (Exception e) {
+            System.err.println("Lỗi parse JSON bù kho: " + e.getMessage());
         }
     }
 }
