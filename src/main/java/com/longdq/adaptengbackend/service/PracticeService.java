@@ -28,6 +28,7 @@ public class PracticeService {
     private final QuestionRepository questionRepository;
     private final UserQuestionHistoryRepository userQuestionHistoryRepository;
     private final SpacedRepetitionService spacedRepetitionService;
+    private final UserRepository userRepository;
 
     public List<QuestionResponseDto> generateDailyReviewTest() {
         User user = (User) SecurityContextHolder.getContext().getAuthentication().getPrincipal();
@@ -114,6 +115,7 @@ public class PracticeService {
         Map<String, UserLearningProgress> progressCache = new HashMap<>();
 
         int correctCount = 0;
+        int totalEarnedXp = 0;
 
         // 3. XỬ LÝ LOGIC TRONG RAM
         for (DailyReviewSubmissionRequestDto.UserAnswerDto answer : request.getAnswers()) {
@@ -123,6 +125,8 @@ public class PracticeService {
             boolean isCorrect = question.getCorrectAnswer().equalsIgnoreCase(answer.getSelectedAnswer());
             if (isCorrect) correctCount++;
 
+
+            totalEarnedXp += isCorrect ? 10 : 2;
             // Lịch sử thì không sợ trùng, cứ tống vào List
             UserQuestionHistory history = new UserQuestionHistory();
             history.setUserId(user.getId());
@@ -184,7 +188,8 @@ public class PracticeService {
 
         // Chỉ lưu những value đã được chắt lọc duy nhất (Distinct) trong Cache
         progressRepository.saveAll(progressCache.values());
-
+        user.setTotalXp(user.getTotalXp() + totalEarnedXp);
+        userRepository.save(user);
         return new DailyReviewResultResponseDto(request.getAnswers().size(), correctCount, results);
     }
 }

@@ -37,4 +37,7 @@ public interface UserLearningProgressRepository extends JpaRepository<UserLearni
             "WHERE p.nextReviewDate <= :thresholdDate")
     List<Object[]> findDistinctItemsForReview(@Param("thresholdDate") LocalDateTime thresholdDate);
 
+    // Đếm số lượng tiến độ học tập đã đến hạn hoặc quá hạn ôn tập của 1 user
+    long countByUserIdAndNextReviewDateLessThanEqual(UUID userId, LocalDateTime dateTime);
+
 }
