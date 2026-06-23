@@ -45,7 +45,8 @@ public class AuthService {
                 jwtToken,
                 user.getId().toString(),
                 user.getEmail(),
-                user.getFullName()
+                user.getFullName(),
+                null
         );
     }
 
@@ -70,7 +71,8 @@ public class AuthService {
                 jwtToken,
                 user.getId().toString(),
                 user.getEmail(),
-                user.getFullName()
+                user.getFullName(),
+                user.getLearningTrack()
         );
     }
 }

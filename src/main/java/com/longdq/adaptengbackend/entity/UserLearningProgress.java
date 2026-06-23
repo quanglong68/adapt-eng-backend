@@ -1,5 +1,7 @@
 package com.longdq.adaptengbackend.entity;
 
+import com.longdq.adaptengbackend.enums.LearningTrack;
+import com.longdq.adaptengbackend.enums.ToeicPart;
 import jakarta.persistence.*;
 import lombok.AllArgsConstructor;
 import lombok.Data;
@@ -40,4 +42,12 @@ public class UserLearningProgress {
 
     @Column(name = "next_review_date")
     private LocalDateTime nextReviewDate;
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "learning_track")
+    private LearningTrack learningTrack;
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "toeic_part")
+    private ToeicPart toeicPart;
 }
