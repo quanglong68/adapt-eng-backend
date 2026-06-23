@@ -1,7 +1,13 @@
 package com.longdq.adaptengbackend.scheduler;
 
+import com.longdq.adaptengbackend.entity.KnowledgeItem;
+import com.longdq.adaptengbackend.enums.Level;
+import com.longdq.adaptengbackend.enums.Purpose;
+import com.longdq.adaptengbackend.enums.ToeicPart;
+import com.longdq.adaptengbackend.repository.KnowledgeItemRepository;
 import com.longdq.adaptengbackend.repository.QuestionRepository;
 import com.longdq.adaptengbackend.repository.UserLearningProgressRepository;
+import com.longdq.adaptengbackend.repository.UserRepository;
 import com.longdq.adaptengbackend.service.DataSyncService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.scheduling.annotation.Scheduled;
@@ -19,17 +25,93 @@ public class DailyQuestionInventoryJob {
     private final UserLearningProgressRepository progressRepository;
     private final QuestionRepository questionRepository;
     private final DataSyncService dataSyncService;
+    private final KnowledgeItemRepository knowledgeItemRepository;
 
     private static final int MAX_RETRY_TIMES = 5;
     private static final int MIN_POOL_SIZE = 30;
     private static final int BATCH_SIZE = 6;
+    private static final int THRESHOLD = 30;
+
+    @Scheduled(cron = "0 0 2 * * ?")
+    public void checkAndRefillToeicInventory() {
+        System.out.println("\n--- 🛠️ BẮT ĐẦU KIỂM KHO ĐẠN TOEIC ÔN TẬP (NGƯỠNG: 30) ---");
+
+        LocalDateTime threeDaysLater = LocalDateTime.now().plusDays(3);
+        List<Object[]> distinctItems = progressRepository.findDistinctToeicItemsForReview(threeDaysLater);
+
+        if (distinctItems.isEmpty()) {
+            System.out.println("✅ Không có nợ SM-2 sắp hạn. Kho đạn an toàn.");
+            return;
+        }
+
+        for (Object[] item : distinctItems) {
+            UUID kId = (UUID) item[0];
+            String targetWord = (String) item[2];
+            String partName = item[3] != null ? item[3].toString() : null;
+            String levelName = item[4] != null ? item[4].toString() : "B1";
+
+            if (partName == null || levelName == null) continue;
+
+            ToeicPart toeicPart = ToeicPart.valueOf(partName);
+            Level level = Level.valueOf(levelName);
+
+            // Đếm số đạn hiện có
+            long currentStock = questionRepository.countGlobalQuestions(kId, targetWord);
+
+            if (currentStock < THRESHOLD) {
+                String taskName = "Bơm đạn [" + toeicPart.name() + "] từ: '" + targetWord + "'";
+                System.out.println("\n⚠️ Kho chứa: " + currentStock + "/" + THRESHOLD + " -> " + taskName);
+
+                KnowledgeItem kItem = (kId != null) ? knowledgeItemRepository.findById(kId).orElse(null) : null;
+
+                executeWithRetry(() -> {
+                    if (toeicPart == ToeicPart.PART_5) {
+                        dataSyncService.generateAndSaveToeicPart5(level, kItem, targetWord, Purpose.PRACTICE);
+                    } else {
+                        // AI đẻ 1 đoạn văn. Vài đêm sau sẽ đủ 30
+                        dataSyncService.generateAndSaveToeicPassage(level, toeicPart, kItem, targetWord, Purpose.PRACTICE);
+                    }
+                }, taskName);
+            }
+        }
+        System.out.println("\n🎉 TIẾN TRÌNH NẠP KHO ĐÊM ĐÃ HOÀN TẤT! 🎉");
+    }
+
+    /**
+     * Hàm helper xử lý Retry Cục Bộ giống hệt luồng Monthly Test.
+     * Thất bại 1 từ vựng không làm chết toàn bộ tiến trình nạp kho.
+     */
+    private void executeWithRetry(Runnable task, String taskName) {
+        int attempt = 0;
+        boolean success = false;
+
+        while (attempt < MAX_RETRY_TIMES && !success) {
+            try {
+                attempt++;
+                System.out.println("⏳ Đang xử lý: " + taskName + " (Lần thử: " + attempt + ")...");
+                task.run();
+                success = true;
+
+                // Nghỉ 4s tránh Rate Limit của Google API (Giới hạn 15 RPM của bản miễn phí)
+                Thread.sleep(4000);
+            } catch (Exception e) {
+                System.err.println("❌ Lỗi sinh " + taskName + ": " + e.getMessage());
+                if (attempt < MAX_RETRY_TIMES) {
+                    System.out.println("🔄 Đang thử lại sau 10 giây...");
+                    try { Thread.sleep(10000); } catch (InterruptedException ie) { Thread.currentThread().interrupt(); }
+                } else {
+                    System.err.println("🚨 Đã bỏ cuộc sinh " + taskName + " sau " + MAX_RETRY_TIMES + " lần thử.");
+                }
+            }
+        }
+    }
 
     @Scheduled(cron = "0 0 2 * * ?")
     public void checkAndRefillQuestionInventory() {
         System.out.println("\n--- BẮT ĐẦU KIỂM KHO CÂU HỎI ÔN TẬP ---");
 
         LocalDateTime threeDaysLater = LocalDateTime.now().plusDays(3);
-        List<Object[]> distinctItems = progressRepository.findDistinctItemsForReview(threeDaysLater);
+        List<Object[]> distinctItems = progressRepository.findDistinctToeicItemsForReview(threeDaysLater);
 
         // BƯỚC 1: LỌC RA TẤT CẢ NHỮNG ĐỨA THIẾU ĐẠN
         List<Object[]> itemsToRefill = new ArrayList<>();

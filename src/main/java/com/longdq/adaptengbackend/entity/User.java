@@ -2,6 +2,7 @@ package com.longdq.adaptengbackend.entity;
 
 
 
+import com.longdq.adaptengbackend.enums.LearningTrack;
 import com.longdq.adaptengbackend.enums.Level;
 import jakarta.persistence.*;
 import lombok.AllArgsConstructor;
@@ -49,6 +50,10 @@ public class User implements UserDetails {
     @Column(name = "total_xp", nullable = false)
     private int totalXp = 0;
 
+    @Enumerated(EnumType.STRING)
+    @Column(name = "learning_track")
+    private LearningTrack learningTrack;
+
     @Override
     public Collection<? extends GrantedAuthority> getAuthorities() {
         return List.of(new SimpleGrantedAuthority("ROLE_USER"));
@@ -78,4 +83,5 @@ public class User implements UserDetails {
     public boolean isEnabled() {
         return true;
     }
+
 }

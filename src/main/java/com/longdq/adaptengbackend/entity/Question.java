@@ -1,8 +1,6 @@
 package com.longdq.adaptengbackend.entity;
 
-import com.longdq.adaptengbackend.enums.Level;
-import com.longdq.adaptengbackend.enums.Purpose;
-import com.longdq.adaptengbackend.enums.QuestionType;
+import com.longdq.adaptengbackend.enums.*;
 import jakarta.persistence.*;
 import lombok.AllArgsConstructor;
 import lombok.Data;
@@ -57,4 +55,21 @@ public class Question {
 
     @Column(name = "target_word")
     private String targetWord;
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "learning_track")
+    private LearningTrack learningTrack;
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "skill")
+    private Skill skill;
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "toeic_part")
+    private ToeicPart toeicPart;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "passage_id")
+    @com.fasterxml.jackson.annotation.JsonBackReference
+    private Passage passage;
 }

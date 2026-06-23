@@ -33,10 +33,12 @@ public interface UserLearningProgressRepository extends JpaRepository<UserLearni
             @Param("targetWord") String targetWord
     );
 
-    @Query("SELECT DISTINCT p.knowledgeItem.id, p.knowledgeItem.knowledgeName, p.targetWord FROM UserLearningProgress p " +
-            "WHERE p.nextReviewDate <= :thresholdDate")
-    List<Object[]> findDistinctItemsForReview(@Param("thresholdDate") LocalDateTime thresholdDate);
-
+    // HÀM MỚI DÀNH RIÊNG CHO TIẾN TRÌNH TOEIC
+    @Query("SELECT DISTINCT u.knowledgeItem.id, k.knowledgeName, u.targetWord, u.toeicPart, k.level " +
+            "FROM UserLearningProgress u " +
+            "LEFT JOIN u.knowledgeItem k " +
+            "WHERE u.nextReviewDate <= :date AND u.toeicPart IS NOT NULL")
+    List<Object[]> findDistinctToeicItemsForReview(@Param("date") LocalDateTime date);
     // Đếm số lượng tiến độ học tập đã đến hạn hoặc quá hạn ôn tập của 1 user
     long countByUserIdAndNextReviewDateLessThanEqual(UUID userId, LocalDateTime dateTime);
 
