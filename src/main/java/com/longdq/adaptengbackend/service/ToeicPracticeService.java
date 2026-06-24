@@ -6,8 +6,13 @@ import com.longdq.adaptengbackend.enums.Purpose;
 import com.longdq.adaptengbackend.enums.ToeicPart;
 import com.longdq.adaptengbackend.enums.Level;
 import com.longdq.adaptengbackend.repository.*;
+import com.longdq.adaptengbackend.util.DailyReviewProgressHelper;
+import com.longdq.adaptengbackend.util.KnowledgeDisplayNameUtil;
+import com.longdq.adaptengbackend.util.ProgressCacheKeyUtil;
+import com.longdq.adaptengbackend.util.QuestionReviewBuilder;
+import com.longdq.adaptengbackend.util.SecurityUtils;
 import lombok.RequiredArgsConstructor;
-import org.springframework.security.core.context.SecurityContextHolder;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -15,6 +20,7 @@ import java.time.LocalDateTime;
 import java.util.*;
 import java.util.stream.Collectors;
 
+@Slf4j
 @Service
 @RequiredArgsConstructor
 public class ToeicPracticeService {
@@ -31,7 +37,7 @@ public class ToeicPracticeService {
     // 1. LUỒNG LẮP RÁP ĐỀ THI ÔN TẬP HÀNG NGÀY (MAY ĐO THEO KHUÔN ĐỀ 50 CÂU)
     // =========================================================================
     public List<ToeicPassageResponseDto> generateDailyToeicTest() {
-        User user = (User) SecurityContextHolder.getContext().getAuthentication().getPrincipal();
+        User user = SecurityUtils.getCurrentUser();
         String userLevel = user.getCurrentLevel().name();
 
         // Khởi tạo các thùng chứa ID để tránh trùng lặp câu hỏi và đoạn văn trong đề
@@ -111,7 +117,7 @@ public class ToeicPracticeService {
                 dataSyncService.generateAndSaveToeicPassage(Level.valueOf(level), part, item.getKnowledgeItem(), targetWord, Purpose.PRACTICE);
                 targetQOpt = questionRepository.findNewTargetedPassageQuestion(part.name(), kId, targetWord, level, userId, pickedQuestionIds);
             } catch (Exception e) {
-                System.err.println("❌ Không thể sinh bài đọc SM-2 khẩn cấp: " + e.getMessage());
+                log.error("Failed to generate emergency SM-2 passage: {}", e.getMessage(), e);
             }
         }
 
@@ -151,7 +157,7 @@ public class ToeicPracticeService {
         while (filled < amountNeeded && aiRetries < MAX_AI_RETRIES) {
             try {
                 aiRetries++;
-                System.out.println("⚠️ Kho trống bài random mới, gọi AI sinh bổ sung thời gian thực (Lần thử: " + aiRetries + ")...");
+                log.warn("Empty random question pool, invoking real-time AI generation (attempt {})", aiRetries);
                 dataSyncService.generateAndSaveToeicPassage(user.getCurrentLevel(), part, null, null, Purpose.PRACTICE);
 
                 List<Passage> freshPassages = passageRepository.findUnansweredPassagesToFill(part.name(), user.getId(), pickedPassageIds, 1);
@@ -163,7 +169,7 @@ public class ToeicPracticeService {
                     filled++;
                 }
             } catch (Exception e) {
-                System.err.println("❌ Lỗi gọi Gemini API lấp đề ôn tập: " + e.getMessage());
+                log.error("Gemini API error while filling practice test: {}", e.getMessage(), e);
             }
         }
 
@@ -171,7 +177,7 @@ public class ToeicPracticeService {
         // Nếu AI sập hoặc cạn quota, hốt những đoạn văn cũ nhất đã từng làm ra đắp vào để cứu luồng chạy thời gian thực
         if (filled < amountNeeded) {
             int remaining = amountNeeded - filled;
-            System.out.println("🚨 Luồng AI bất khả dụng. Kích hoạt cứu hộ: Bốc " + remaining + " khối bài đọc cũ nhất.");
+            log.warn("AI unavailable, activating fallback: fetching {} oldest passage blocks", remaining);
 
             List<Passage> oldPassages = passageRepository.findOldestAnsweredPassagesToFill(part.name(), user.getId(), pickedPassageIds, remaining);
             for (Passage p : oldPassages) {
@@ -223,31 +229,33 @@ public class ToeicPracticeService {
     // =========================================================================
     @Transactional
     public DailyReviewResultResponseDto submitDailyToeicReview(DailyReviewSubmissionRequestDto request) {
-        User user = (User) SecurityContextHolder.getContext().getAuthentication().getPrincipal();
+        User user = SecurityUtils.getCurrentUser();
         LocalDateTime now = LocalDateTime.now();
 
         List<Long> questionIds = request.getAnswers().stream()
-                .map(DailyReviewSubmissionRequestDto.UserAnswerDto::getQuestionId)
+                .map(UserAnswerDto::getQuestionId)
                 .collect(Collectors.toList());
         Map<Long, Question> questionMap = questionRepository.findAllById(questionIds).stream()
                 .collect(Collectors.toMap(Question::getId, q -> q));
 
         List<UserQuestionHistory> historiesToSave = new ArrayList<>();
-        List<DailyReviewResultResponseDto.QuestionReviewDto> results = new ArrayList<>();
+        List<QuestionReviewDto> results = new ArrayList<>();
         Map<String, UserLearningProgress> progressCache = new HashMap<>();
-
-        // 🛑 LÍNH GÁC RAM: Chặn đứng tình trạng x2, x3 ngày ôn tập của 1 từ vựng trong cùng 1 session làm đề
         Set<String> processedSm2KeysThisSession = new HashSet<>();
 
         int correctCount = 0;
         int totalEarnedXp = 0;
 
-        for (DailyReviewSubmissionRequestDto.UserAnswerDto answer : request.getAnswers()) {
+        for (UserAnswerDto answer : request.getAnswers()) {
             Question question = questionMap.get(answer.getQuestionId());
-            if (question == null) continue;
+            if (question == null) {
+                continue;
+            }
 
             boolean isCorrect = question.getCorrectAnswer().equalsIgnoreCase(answer.getSelectedAnswer());
-            if (isCorrect) correctCount++;
+            if (isCorrect) {
+                correctCount++;
+            }
             totalEarnedXp += isCorrect ? 10 : 2;
 
             UserQuestionHistory history = new UserQuestionHistory();
@@ -261,51 +269,21 @@ public class ToeicPracticeService {
             String targetWord = question.getTargetWord();
 
             if (knowledgeId != null || targetWord != null) {
-                String cacheKey = (knowledgeId != null ? knowledgeId.toString() : "null") + "_" + (targetWord != null ? targetWord : "null");
+                String cacheKey = ProgressCacheKeyUtil.buildKey(knowledgeId, targetWord);
 
-                // KIỂM TRA: Từ vựng này đã được cập nhật SM-2 trong bài nộp hiện tại chưa?
                 if (!processedSm2KeysThisSession.contains(cacheKey)) {
-                    UserLearningProgress progress = progressCache.get(cacheKey);
-
-                    if (progress == null) {
-                        progress = progressRepository.findProgressRecord(user.getId(), knowledgeId, targetWord)
-                                .orElseGet(() -> {
-                                    UserLearningProgress newProgress = new UserLearningProgress();
-                                    newProgress.setUser(user);
-                                    newProgress.setKnowledgeItem(question.getKnowledgeItem());
-                                    newProgress.setTargetWord(targetWord);
-                                    newProgress.setEaseFactor(2.5);
-                                    newProgress.setRepetitionCount(0);
-                                    newProgress.setIntervalDays(1);
-                                    newProgress.setToeicPart(question.getToeicPart());
-                                    return newProgress;
-                                });
-                        progressCache.put(cacheKey, progress);
-                    }
-
-                    // Thực thi thuật toán cập nhật khoảng cách ghi nhớ trên RAM
+                    UserLearningProgress progress = DailyReviewProgressHelper.resolveOrCreateProgress(
+                            user, question, progressCache, progressRepository, question.getToeicPart());
                     spacedRepetitionService.updateProgress(progress, isCorrect);
-
-                    // Ghi danh vào sổ Lính gác RAM -> Nếu câu sau gặp lại từ này thì chỉ ghi lịch sử, không kích hoạt SM-2 nữa
                     processedSm2KeysThisSession.add(cacheKey);
                 }
             }
 
-            DailyReviewResultResponseDto.QuestionReviewDto reviewDto = new DailyReviewResultResponseDto.QuestionReviewDto();
-            reviewDto.setQuestionId(question.getId());
-            reviewDto.setUserSelectedAnswer(answer.getSelectedAnswer());
-            reviewDto.setCorrectAnswer(question.getCorrectAnswer());
-            reviewDto.setCorrect(isCorrect);
-            reviewDto.setExplanation(question.getExplanation());
-
-            String kName = "";
-            if (targetWord != null) {
-                kName = "Từ vựng: " + targetWord;
-            } else if (question.getKnowledgeItem() != null) {
-                kName = question.getKnowledgeItem().getKnowledgeName();
-            }
-            reviewDto.setKnowledgeName(kName);
-            results.add(reviewDto);
+            results.add(QuestionReviewBuilder.build(
+                    question,
+                    answer.getSelectedAnswer(),
+                    isCorrect,
+                    KnowledgeDisplayNameUtil.forDailyReview(question)));
         }
 
         // Đẩy hàng loạt dữ liệu xuống DB thông qua duy nhất 1 câu query tích lũy

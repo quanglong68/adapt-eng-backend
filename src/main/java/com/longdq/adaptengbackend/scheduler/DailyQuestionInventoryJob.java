@@ -7,9 +7,10 @@ import com.longdq.adaptengbackend.enums.ToeicPart;
 import com.longdq.adaptengbackend.repository.KnowledgeItemRepository;
 import com.longdq.adaptengbackend.repository.QuestionRepository;
 import com.longdq.adaptengbackend.repository.UserLearningProgressRepository;
-import com.longdq.adaptengbackend.repository.UserRepository;
 import com.longdq.adaptengbackend.service.DataSyncService;
+import com.longdq.adaptengbackend.util.RetryExecutor;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 
@@ -18,6 +19,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
 
+@Slf4j
 @Service
 @RequiredArgsConstructor
 public class DailyQuestionInventoryJob {
@@ -34,13 +36,13 @@ public class DailyQuestionInventoryJob {
 
     @Scheduled(cron = "0 0 2 * * ?")
     public void checkAndRefillToeicInventory() {
-        System.out.println("\n--- 🛠️ BẮT ĐẦU KIỂM KHO ĐẠN TOEIC ÔN TẬP (NGƯỠNG: 30) ---");
+        log.info("Starting TOEIC practice inventory check (threshold: {})", THRESHOLD);
 
         LocalDateTime threeDaysLater = LocalDateTime.now().plusDays(3);
         List<Object[]> distinctItems = progressRepository.findDistinctToeicItemsForReview(threeDaysLater);
 
         if (distinctItems.isEmpty()) {
-            System.out.println("✅ Không có nợ SM-2 sắp hạn. Kho đạn an toàn.");
+            log.info("No upcoming SM-2 debt. Inventory is healthy.");
             return;
         }
 
@@ -50,70 +52,42 @@ public class DailyQuestionInventoryJob {
             String partName = item[3] != null ? item[3].toString() : null;
             String levelName = item[4] != null ? item[4].toString() : "B1";
 
-            if (partName == null || levelName == null) continue;
+            if (partName == null || levelName == null) {
+                continue;
+            }
 
             ToeicPart toeicPart = ToeicPart.valueOf(partName);
             Level level = Level.valueOf(levelName);
 
-            // Đếm số đạn hiện có
             long currentStock = questionRepository.countGlobalQuestions(kId, targetWord);
 
-            if (currentStock < THRESHOLD) {
-                String taskName = "Bơm đạn [" + toeicPart.name() + "] từ: '" + targetWord + "'";
-                System.out.println("\n⚠️ Kho chứa: " + currentStock + "/" + THRESHOLD + " -> " + taskName);
-
-                KnowledgeItem kItem = (kId != null) ? knowledgeItemRepository.findById(kId).orElse(null) : null;
-
-                executeWithRetry(() -> {
-                    if (toeicPart == ToeicPart.PART_5) {
-                        dataSyncService.generateAndSaveToeicPart5(level, kItem, targetWord, Purpose.PRACTICE);
-                    } else {
-                        // AI đẻ 1 đoạn văn. Vài đêm sau sẽ đủ 30
-                        dataSyncService.generateAndSaveToeicPassage(level, toeicPart, kItem, targetWord, Purpose.PRACTICE);
-                    }
-                }, taskName);
+            if (currentStock >= THRESHOLD) {
+                continue;
             }
-        }
-        System.out.println("\n🎉 TIẾN TRÌNH NẠP KHO ĐÊM ĐÃ HOÀN TẤT! 🎉");
-    }
 
-    /**
-     * Hàm helper xử lý Retry Cục Bộ giống hệt luồng Monthly Test.
-     * Thất bại 1 từ vựng không làm chết toàn bộ tiến trình nạp kho.
-     */
-    private void executeWithRetry(Runnable task, String taskName) {
-        int attempt = 0;
-        boolean success = false;
+            String taskName = "Bơm đạn [" + toeicPart.name() + "] từ: '" + targetWord + "'";
+            log.warn("Stock {}/{} -> {}", currentStock, THRESHOLD, taskName);
 
-        while (attempt < MAX_RETRY_TIMES && !success) {
-            try {
-                attempt++;
-                System.out.println("⏳ Đang xử lý: " + taskName + " (Lần thử: " + attempt + ")...");
-                task.run();
-                success = true;
+            KnowledgeItem kItem = (kId != null) ? knowledgeItemRepository.findById(kId).orElse(null) : null;
 
-                // Nghỉ 4s tránh Rate Limit của Google API (Giới hạn 15 RPM của bản miễn phí)
-                Thread.sleep(4000);
-            } catch (Exception e) {
-                System.err.println("❌ Lỗi sinh " + taskName + ": " + e.getMessage());
-                if (attempt < MAX_RETRY_TIMES) {
-                    System.out.println("🔄 Đang thử lại sau 10 giây...");
-                    try { Thread.sleep(10000); } catch (InterruptedException ie) { Thread.currentThread().interrupt(); }
+            RetryExecutor.executeWithRetry(() -> {
+                if (toeicPart == ToeicPart.PART_5) {
+                    dataSyncService.generateAndSaveToeicPart5(level, kItem, targetWord, Purpose.PRACTICE);
                 } else {
-                    System.err.println("🚨 Đã bỏ cuộc sinh " + taskName + " sau " + MAX_RETRY_TIMES + " lần thử.");
+                    dataSyncService.generateAndSaveToeicPassage(level, toeicPart, kItem, targetWord, Purpose.PRACTICE);
                 }
-            }
+            }, taskName, MAX_RETRY_TIMES, 10_000, 4_000);
         }
+        log.info("Nightly TOEIC inventory refill completed");
     }
 
     @Scheduled(cron = "0 0 2 * * ?")
     public void checkAndRefillQuestionInventory() {
-        System.out.println("\n--- BẮT ĐẦU KIỂM KHO CÂU HỎI ÔN TẬP ---");
+        log.info("Starting general practice inventory check");
 
         LocalDateTime threeDaysLater = LocalDateTime.now().plusDays(3);
         List<Object[]> distinctItems = progressRepository.findDistinctToeicItemsForReview(threeDaysLater);
 
-        // BƯỚC 1: LỌC RA TẤT CẢ NHỮNG ĐỨA THIẾU ĐẠN
         List<Object[]> itemsToRefill = new ArrayList<>();
         for (Object[] item : distinctItems) {
             UUID kId = (UUID) item[0];
@@ -124,60 +98,73 @@ public class DailyQuestionInventoryJob {
         }
 
         if (itemsToRefill.isEmpty()) {
-            System.out.println("Kho đạn đầy đủ. Không cần nạp thêm.");
+            log.info("Inventory is full. No refill needed.");
             return;
         }
 
-        System.out.println("Phát hiện " + itemsToRefill.size() + " chủ điểm thiếu đạn. Bắt đầu tiến trình nạp...");
+        log.info("Found {} knowledge items below pool size. Starting refill...", itemsToRefill.size());
 
-        // BƯỚC 2: CHIA LÔ (BATCHING) ĐỂ GỌI AI & CHỜ NGHỈ
         for (int i = 0; i < itemsToRefill.size(); i += BATCH_SIZE) {
             int end = Math.min(i + BATCH_SIZE, itemsToRefill.size());
             List<Object[]> batch = itemsToRefill.subList(i, end);
+            String prompt = buildBatchPrompt(batch);
+            int batchNumber = i / BATCH_SIZE + 1;
 
-            // Nối chuỗi cho lô hiện tại
-            StringBuilder promptBuilder = new StringBuilder();
-            for (Object[] item : batch) {
-                UUID kId = (UUID) item[0];
-                String kName = (String) item[1]; // Lấy thêm Tên chủ điểm từ DB
-                String targetWord = (String) item[2];
-
-                promptBuilder.append("- knowledgeId: ").append(kId == null ? "null" : "\"" + kId.toString() + "\"")
-                        .append(", targetWord: ").append(targetWord == null ? "null" : "\"" + targetWord + "\"")
-                        .append(", Yêu cầu: Tạo 5 câu hỏi");
-
-                // CHỈ ĐIỂM RÕ RÀNG CHO AI:
-                if (kName != null) promptBuilder.append(" về chủ điểm ngữ pháp '").append(kName).append("'");
-                if (targetWord != null) promptBuilder.append(" tập trung kiểm tra từ vựng '").append(targetWord).append("'");
-
-                promptBuilder.append(".\n");
-            }
-            // Gọi AI với cơ chế Retry
             boolean isSuccess = false;
             int attempt = 0;
             while (!isSuccess && attempt < MAX_RETRY_TIMES) {
                 try {
                     attempt++;
-                    System.out.println("Đang gửi lô " + (i / BATCH_SIZE + 1) + " (Gồm " + batch.size() + " chủ điểm)...");
-                    dataSyncService.generateAndSaveDailyQuestions(promptBuilder.toString());
+                    log.info("Sending batch {} ({} items)", batchNumber, batch.size());
+                    dataSyncService.generateAndSaveDailyQuestions(prompt);
                     isSuccess = true;
                 } catch (Exception e) {
-                    System.err.println("Lỗi AI lô " + (i / BATCH_SIZE + 1) + " (Thử lại lần " + attempt + "): " + e.getMessage());
-                    try { Thread.sleep(15000); } catch (InterruptedException ie) { Thread.currentThread().interrupt(); }
+                    log.error("AI batch {} failed (attempt {}): {}", batchNumber, attempt, e.getMessage());
+                    sleepQuietly(15_000);
                 }
             }
 
             if (!isSuccess) {
-                System.err.println("Bỏ qua lô " + (i / BATCH_SIZE + 1) + " vì lỗi quá 5 lần.");
+                log.error("Skipping batch {} after {} failed attempts", batchNumber, MAX_RETRY_TIMES);
             }
 
-            // TƯ DUY CỦA LONG: Nghỉ xả hơi 40 giây trước khi gọi lô tiếp theo (Né Rate Limit)
             if (end < itemsToRefill.size()) {
-                System.out.println("Đang ngủ 40s để làm mát server Google...\n");
-                try { Thread.sleep(40000); } catch (InterruptedException e) { Thread.currentThread().interrupt(); }
+                log.info("Cooling down 40s before next batch");
+                sleepQuietly(40_000);
             }
         }
 
-        System.out.println("\n🎉 TIẾN TRÌNH NẠP KHO ĐÃ HOÀN TẤT TRONG ĐÊM! 🎉");
+        log.info("Nightly general inventory refill completed");
+    }
+
+    private String buildBatchPrompt(List<Object[]> batch) {
+        StringBuilder promptBuilder = new StringBuilder();
+        for (Object[] item : batch) {
+            UUID kId = (UUID) item[0];
+            String kName = (String) item[1];
+            String targetWord = (String) item[2];
+
+            promptBuilder.append("- knowledgeId: ").append(kId == null ? "null" : "\"" + kId + "\"")
+                    .append(", targetWord: ").append(targetWord == null ? "null" : "\"" + targetWord + "\"")
+                    .append(", Yêu cầu: Tạo 5 câu hỏi");
+
+            if (kName != null) {
+                promptBuilder.append(" về chủ điểm ngữ pháp '").append(kName).append("'");
+            }
+            if (targetWord != null) {
+                promptBuilder.append(" tập trung kiểm tra từ vựng '").append(targetWord).append("'");
+            }
+
+            promptBuilder.append(".\n");
+        }
+        return promptBuilder.toString();
+    }
+
+    private void sleepQuietly(long millis) {
+        try {
+            Thread.sleep(millis);
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+        }
     }
 }

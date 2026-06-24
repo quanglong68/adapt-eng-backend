@@ -4,6 +4,8 @@ import com.longdq.adaptengbackend.dto.AuthResponseDto;
 import com.longdq.adaptengbackend.dto.LoginRequestDto;
 import com.longdq.adaptengbackend.dto.RegisterRequestDto;
 import com.longdq.adaptengbackend.entity.User;
+import com.longdq.adaptengbackend.exception.DuplicateResourceException;
+import com.longdq.adaptengbackend.exception.ResourceNotFoundException;
 import com.longdq.adaptengbackend.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.authentication.AuthenticationManager;
@@ -22,23 +24,19 @@ public class AuthService {
     private final JwtService jwtService;
     private final AuthenticationManager authenticationManager;
 
-    // 1. Logic Đăng ký tài khoản
     public AuthResponseDto register(RegisterRequestDto request) {
-        // Kiểm tra xem email đã tồn tại chưa
         if (userRepository.findByEmail(request.getEmail()).isPresent()) {
-            throw new RuntimeException("Email này đã được sử dụng!");
+            throw new DuplicateResourceException("Email này đã được sử dụng!");
         }
 
-        // Tạo user mới và băm mật khẩu
         User user = new User();
         user.setFullName(request.getFullName());
         user.setEmail(request.getEmail());
-        user.setPassword(passwordEncoder.encode(request.getPassword())); // BĂM MẬT KHẨU ở đây
+        user.setPassword(passwordEncoder.encode(request.getPassword()));
         user.setCreatedAt(LocalDateTime.now());
 
         userRepository.save(user);
 
-        // Tạo vòng tay JWT cho user mới luôn
         String jwtToken = jwtService.generateToken(user);
 
         return new AuthResponseDto(
@@ -50,10 +48,7 @@ public class AuthService {
         );
     }
 
-    // 2. Logic Đăng nhập
     public AuthResponseDto login(LoginRequestDto request) {
-        // Hàm này sẽ tự động kiểm tra email và mật khẩu (đã băm) có khớp nhau không
-        // Nếu sai mật khẩu hoặc sai email, nó sẽ tự văng ngoại lệ BadCredentialsException
         authenticationManager.authenticate(
                 new UsernamePasswordAuthenticationToken(
                         request.getEmail(),
@@ -61,9 +56,8 @@ public class AuthService {
                 )
         );
 
-        // Nếu đi đến được dòng này tức là đăng nhập thành công, lấy user ra để tạo token
         User user = userRepository.findByEmail(request.getEmail())
-                .orElseThrow(() -> new RuntimeException("Không tìm thấy người dùng!"));
+                .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy người dùng!"));
 
         String jwtToken = jwtService.generateToken(user);
 
