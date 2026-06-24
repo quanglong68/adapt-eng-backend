@@ -3,8 +3,8 @@ package com.longdq.adaptengbackend.service;
 import com.longdq.adaptengbackend.dto.KnowledgeMapResponse;
 import com.longdq.adaptengbackend.entity.User;
 import com.longdq.adaptengbackend.repository.UserQuestionHistoryRepository;
+import com.longdq.adaptengbackend.util.SecurityUtils;
 import lombok.RequiredArgsConstructor;
-import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 
 import java.sql.Timestamp;
@@ -74,7 +74,7 @@ public class KnowledgeMapService {
 
     // API CHÍNH: Lấy dữ liệu Bản đồ kiến thức
     public KnowledgeMapResponse getKnowledgeMap() {
-        User user = (User) SecurityContextHolder.getContext().getAuthentication().getPrincipal();
+        User user = SecurityUtils.getCurrentUser();
 
         // 1. Xử lý dữ liệu Radar (Biểu đồ lưới)
         List<UserQuestionHistoryRepository.RadarStatsProjection> radarProjections = historyRepository.findRadarStatsByUserId(user.getId());

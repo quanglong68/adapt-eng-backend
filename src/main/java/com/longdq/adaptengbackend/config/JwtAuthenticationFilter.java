@@ -6,6 +6,7 @@ import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.lang.NonNull;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.context.SecurityContextHolder;
@@ -19,6 +20,7 @@ import java.io.IOException;
 
 @Component
 @RequiredArgsConstructor
+@Slf4j
 public class JwtAuthenticationFilter extends OncePerRequestFilter {
 
     private final JwtService jwtService;
@@ -71,7 +73,7 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
         } catch (Exception e) {
             // NẾU TOKEN RÁC, HẾT HẠN, SAI CHỮ KÝ -> Bắt lỗi tại đây!
             // Ghi log nhẹ nhàng chứ KHÔNG quăng lỗi làm sập hệ thống
-            System.out.println("⚠️ Token bị từ chối: " + e.getMessage());
+            log.warn("Token rejected: {}", e.getMessage());
             // Hệ thống cứ thế trôi đi tiếp. Lát ra đến SecurityConfig, nếu API thả cửa (/register) thì qua, nếu API cấm thì sẽ bị chặn.
         }
 

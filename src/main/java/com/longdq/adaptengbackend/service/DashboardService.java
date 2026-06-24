@@ -4,8 +4,8 @@ import com.longdq.adaptengbackend.dto.DashboardSummaryResponse;
 import com.longdq.adaptengbackend.entity.User;
 import com.longdq.adaptengbackend.repository.UserLearningProgressRepository;
 import com.longdq.adaptengbackend.repository.UserQuestionHistoryRepository;
+import com.longdq.adaptengbackend.util.SecurityUtils;
 import lombok.RequiredArgsConstructor;
-import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 
 import java.time.LocalDate;
@@ -21,7 +21,7 @@ public class DashboardService {
     private final UserQuestionHistoryRepository historyRepository;
 
     public DashboardSummaryResponse getDashboardSummary() {
-        User user = (User) SecurityContextHolder.getContext().getAuthentication().getPrincipal();
+        User user = SecurityUtils.getCurrentUser();
 
         // 1. Lấy số nhiệm vụ cần làm hôm nay (Bản ghi có lịch review <= thời điểm hiện tại)
         long dailyMissionCount = progressRepository.countByUserIdAndNextReviewDateLessThanEqual(user.getId(), LocalDateTime.now());

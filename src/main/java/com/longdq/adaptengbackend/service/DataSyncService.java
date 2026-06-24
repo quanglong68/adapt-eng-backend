@@ -8,16 +8,19 @@ import com.longdq.adaptengbackend.entity.KnowledgeItem;
 import com.longdq.adaptengbackend.entity.Passage;
 import com.longdq.adaptengbackend.entity.Question;
 import com.longdq.adaptengbackend.enums.*;
+import com.longdq.adaptengbackend.exception.AIProcessingException;
 import com.longdq.adaptengbackend.repository.KnowledgeItemRepository;
 import com.longdq.adaptengbackend.repository.PassageRepository;
 import com.longdq.adaptengbackend.repository.QuestionRepository;
 import com.longdq.adaptengbackend.repository.UserLearningProgressRepository;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
 
+@Slf4j
 @Service
 @RequiredArgsConstructor
 public class DataSyncService {
@@ -30,12 +33,14 @@ public class DataSyncService {
     private final PassageRepository passageRepository;
 
     private boolean isVocabularyType(KnowledgeType type) {
-        if (type == null) return false;
-        return type == KnowledgeType.VOCABULARY ||
-                type == KnowledgeType.COLLOCATIONS ||
-                type == KnowledgeType.PHRASAL_VERBS ||
-                type == KnowledgeType.WORD_FORMATION ||
-                type == KnowledgeType.SYNONYM;
+        if (type == null) {
+            return false;
+        }
+        return type == KnowledgeType.VOCABULARY
+                || type == KnowledgeType.COLLOCATIONS
+                || type == KnowledgeType.PHRASAL_VERBS
+                || type == KnowledgeType.WORD_FORMATION
+                || type == KnowledgeType.SYNONYM;
     }
 
     @Transactional
@@ -43,11 +48,10 @@ public class DataSyncService {
         String jsonResult = aiService.generateTestQuestions(level);
 
         if (jsonResult == null || jsonResult.isEmpty()) {
-            throw new RuntimeException("Không lấy được dữ liệu từ AI");
+            throw new AIProcessingException("Không lấy được dữ liệu từ AI");
         }
 
         try {
-            // Sửa UNESCAPED thành UNQUOTED
             objectMapper.configure(com.fasterxml.jackson.core.JsonParser.Feature.ALLOW_UNQUOTED_CONTROL_CHARS, true);
             List<AIGeneratedQuestionDto> dtos = objectMapper.readValue(
                     jsonResult,
@@ -55,7 +59,6 @@ public class DataSyncService {
             );
 
             for (AIGeneratedQuestionDto dto : dtos) {
-
                 KnowledgeItem knowledgeItem = knowledgeItemRepository
                         .findByKnowledgeTypeAndLevel(dto.getKnowledgeType(), level)
                         .orElseGet(() -> {
@@ -67,46 +70,32 @@ public class DataSyncService {
                             return knowledgeItemRepository.save(newItem);
                         });
 
-                // B. Tạo Câu hỏi (Question)
-                Question question = new Question();
-                question.setQuestionType(dto.getQuestionType());
-                question.setContent(dto.getContent());
-                question.setOptions(dto.getOptions());
-                question.setCorrectAnswer(dto.getCorrectAnswer());
-                question.setExplanation(dto.getExplanation());
-                question.setKnowledgeItem(knowledgeItem);
-                question.setLevel(level);
-                question.setPurpose(Purpose.TEST);
-                question.setIsAnswer(false);
-                if (isVocabularyType(dto.getKnowledgeType())) {
-                    question.setTargetWord(dto.getTargetWord());
-                } else {
-                    question.setTargetWord(null);
-                }
+                Question question = buildGeneralQuestion(dto, knowledgeItem, level, Purpose.TEST);
                 Question savedQuestion = questionRepository.save(question);
-                System.out.println("✅ [NEW QUESTION] ID: " + savedQuestion.getId() +
-                        " | Topic: " + (savedQuestion.getKnowledgeItem() != null ? savedQuestion.getKnowledgeItem().getKnowledgeName() : "N/A") +
-                        " | Word: " + (savedQuestion.getTargetWord() != null ? savedQuestion.getTargetWord() : "None") +
-                        " | Content: " + savedQuestion.getContent());
+                logSavedQuestion(savedQuestion);
             }
 
-            System.out.println("Đã lưu thành công 30 câu hỏi mới vào Database cho User!");
+            log.info("Successfully saved 30 new test questions for level {}", level);
 
+        } catch (AIProcessingException e) {
+            throw e;
         } catch (Exception e) {
-            System.err.println("Lỗi khi parse JSON hoặc lưu DB: " + e.getMessage());
-            throw new RuntimeException(e);
+            log.error("Failed to parse JSON or save monthly test questions: {}", e.getMessage(), e);
+            throw new AIProcessingException(e.getMessage(), e);
         }
     }
 
     @Transactional
     public void generateAndSaveDailyQuestions(String promptRequirement) {
         String jsonResult = aiService.generateDailyQuestionsForMissingItems(promptRequirement);
-        if (jsonResult == null || jsonResult.isEmpty()) throw new RuntimeException("AI không trả về JSON");
+        if (jsonResult == null || jsonResult.isEmpty()) {
+            throw new AIProcessingException("AI không trả về JSON");
+        }
 
         try {
             objectMapper.configure(com.fasterxml.jackson.core.JsonParser.Feature.ALLOW_UNQUOTED_CONTROL_CHARS, true);
             List<AIGeneratedQuestionDto> dtos = objectMapper.readValue(
-                    jsonResult, new com.fasterxml.jackson.core.type.TypeReference<List<AIGeneratedQuestionDto>>() {}
+                    jsonResult, new TypeReference<List<AIGeneratedQuestionDto>>() {}
             );
 
             for (AIGeneratedQuestionDto dto : dtos) {
@@ -116,14 +105,10 @@ public class DataSyncService {
                 question.setOptions(dto.getOptions());
                 question.setCorrectAnswer(dto.getCorrectAnswer());
                 question.setExplanation(dto.getExplanation());
-
-                if (dto.getKnowledgeId() != null) {
-                    knowledgeItemRepository.findById(dto.getKnowledgeId()).ifPresent(question::setKnowledgeItem);
-                }
-
                 question.setLevel(Level.B1);
-                question.setPurpose(Purpose.PRACTICE); // Ôn tập là PRACTICE
+                question.setPurpose(Purpose.PRACTICE);
                 question.setIsAnswer(false);
+
                 if (dto.getKnowledgeId() != null) {
                     knowledgeItemRepository.findById(dto.getKnowledgeId()).ifPresent(ki -> {
                         question.setKnowledgeItem(ki);
@@ -134,35 +119,31 @@ public class DataSyncService {
                         }
                     });
                 } else {
-                    // Đề phòng trường hợp AI bù kho random không gắn knowledgeId
                     question.setTargetWord(null);
                 }
+
                 Question savedQuestion = questionRepository.save(question);
-                System.out.println("✅ [NEW QUESTION] ID: " + savedQuestion.getId() +
-                        " | Topic: " + (savedQuestion.getKnowledgeItem() != null ? savedQuestion.getKnowledgeItem().getKnowledgeName() : "N/A") +
-                        " | Word: " + (savedQuestion.getTargetWord() != null ? savedQuestion.getTargetWord() : "None") +
-                        " | Content: " + savedQuestion.getContent());
+                logSavedQuestion(savedQuestion);
             }
-            System.out.println("Đã nhập " + dtos.size() + " câu hỏi Ôn tập!");
+            log.info("Imported {} daily practice questions", dtos.size());
         } catch (Exception e) {
-            System.err.println("Lỗi parse JSON bù kho: " + e.getMessage());
+            log.error("Failed to parse daily refill JSON: {}", e.getMessage(), e);
         }
     }
 
     @Transactional
-    public void generateAndSaveToeicPassage(Level level, ToeicPart toeicPart, KnowledgeItem knowledgeItem, String targetWord, Purpose purpose) {
-        String jsonResult = null;
-
-        if (toeicPart == ToeicPart.PART_6) {
-            jsonResult = aiService.generateToeicPart6Single(level, knowledgeItem != null ? knowledgeItem.getKnowledgeType() : null, targetWord);
-        } else if (toeicPart == ToeicPart.PART_7_SINGLE) {
-            jsonResult = aiService.generateToeicPart7Single(level, targetWord);
-        } else if (toeicPart == ToeicPart.PART_7_MULTIPLE) {
-            jsonResult = aiService.generateToeicPart7Multiple(level, targetWord);
-        }
+    public void generateAndSaveToeicPassage(
+            Level level, ToeicPart toeicPart, KnowledgeItem knowledgeItem, String targetWord, Purpose purpose) {
+        String jsonResult = switch (toeicPart) {
+            case PART_6 -> aiService.generateToeicPart6Single(
+                    level, knowledgeItem != null ? knowledgeItem.getKnowledgeType() : null, targetWord);
+            case PART_7_SINGLE -> aiService.generateToeicPart7Single(level, targetWord);
+            case PART_7_MULTIPLE -> aiService.generateToeicPart7Multiple(level, targetWord);
+            default -> null;
+        };
 
         if (jsonResult == null || jsonResult.isEmpty()) {
-            throw new RuntimeException("AI không trả về JSON cho phần thi TOEIC: " + toeicPart.name());
+            throw new AIProcessingException("AI không trả về JSON cho phần thi TOEIC: " + toeicPart.name());
         }
 
         try {
@@ -173,8 +154,6 @@ public class DataSyncService {
             passage.setLearningTrack(LearningTrack.TOEIC);
             passage.setSkill(Skill.READING);
             passage.setContent(dto.getPassageContent());
-
-            // 👇 ĐÃ THÊM DÒNG NÀY ĐỂ VÁ LỖI NULL
             passage.setToeicPart(toeicPart);
 
             Passage savedPassage = passageRepository.save(passage);
@@ -182,19 +161,20 @@ public class DataSyncService {
             for (ToeicAIGeneratedDto.ToeicQuestionDto qDto : dto.getQuestions()) {
                 saveToeicQuestion(qDto, level, toeicPart, purpose, savedPassage);
             }
+        } catch (AIProcessingException e) {
+            throw e;
         } catch (Exception e) {
-            throw new RuntimeException("Lỗi parse JSON Bài đọc TOEIC: " + e.getMessage(), e);
+            throw new AIProcessingException("Lỗi parse JSON Bài đọc TOEIC: " + e.getMessage(), e);
         }
     }
 
-    // Transaction ĐỘC LẬP bảo vệ 15 câu Part 5
     @Transactional
     public void generateAndSaveToeicPart5(Level level, KnowledgeItem knowledgeItem, String targetWord, Purpose purpose) {
         KnowledgeType specificType = knowledgeItem != null ? knowledgeItem.getKnowledgeType() : null;
         String jsonResult = aiService.generateToeicPart5(level, specificType, targetWord);
 
         if (jsonResult == null || jsonResult.isEmpty()) {
-            throw new RuntimeException("AI không trả về JSON cho TOEIC PART 5");
+            throw new AIProcessingException("AI không trả về JSON cho TOEIC PART 5");
         }
 
         try {
@@ -206,12 +186,35 @@ public class DataSyncService {
             for (ToeicAIGeneratedDto.ToeicQuestionDto qDto : dtos) {
                 saveToeicQuestion(qDto, level, ToeicPart.PART_5, purpose, null);
             }
+        } catch (AIProcessingException e) {
+            throw e;
         } catch (Exception e) {
-            throw new RuntimeException("Lỗi parse JSON TOEIC PART 5: " + e.getMessage(), e);
+            throw new AIProcessingException("Lỗi parse JSON TOEIC PART 5: " + e.getMessage(), e);
         }
     }
 
-    private void saveToeicQuestion(ToeicAIGeneratedDto.ToeicQuestionDto qDto, Level level, ToeicPart toeicPart, Purpose purpose, Passage passage) {
+    private Question buildGeneralQuestion(
+            AIGeneratedQuestionDto dto, KnowledgeItem knowledgeItem, Level level, Purpose purpose) {
+        Question question = new Question();
+        question.setQuestionType(dto.getQuestionType());
+        question.setContent(dto.getContent());
+        question.setOptions(dto.getOptions());
+        question.setCorrectAnswer(dto.getCorrectAnswer());
+        question.setExplanation(dto.getExplanation());
+        question.setKnowledgeItem(knowledgeItem);
+        question.setLevel(level);
+        question.setPurpose(purpose);
+        question.setIsAnswer(false);
+        if (isVocabularyType(dto.getKnowledgeType())) {
+            question.setTargetWord(dto.getTargetWord());
+        } else {
+            question.setTargetWord(null);
+        }
+        return question;
+    }
+
+    private void saveToeicQuestion(
+            ToeicAIGeneratedDto.ToeicQuestionDto qDto, Level level, ToeicPart toeicPart, Purpose purpose, Passage passage) {
         Question question = new Question();
         question.setLearningTrack(LearningTrack.TOEIC);
         question.setSkill(Skill.READING);
@@ -238,12 +241,21 @@ public class DataSyncService {
                         KnowledgeItem newItem = new KnowledgeItem();
                         newItem.setKnowledgeType(qDto.getKnowledgeType());
                         newItem.setLevel(level);
-                        newItem.setKnowledgeName(qDto.getKnowledgeName() != null ? qDto.getKnowledgeName() : qDto.getKnowledgeType().name());
+                        newItem.setKnowledgeName(
+                                qDto.getKnowledgeName() != null ? qDto.getKnowledgeName() : qDto.getKnowledgeType().name());
                         newItem.setPurpose(purpose);
                         return knowledgeItemRepository.save(newItem);
                     });
             question.setKnowledgeItem(ki);
         }
         questionRepository.save(question);
+    }
+
+    private void logSavedQuestion(Question savedQuestion) {
+        log.info("[NEW QUESTION] ID: {} | Topic: {} | Word: {} | Content: {}",
+                savedQuestion.getId(),
+                savedQuestion.getKnowledgeItem() != null ? savedQuestion.getKnowledgeItem().getKnowledgeName() : "N/A",
+                savedQuestion.getTargetWord() != null ? savedQuestion.getTargetWord() : "None",
+                savedQuestion.getContent());
     }
 }
