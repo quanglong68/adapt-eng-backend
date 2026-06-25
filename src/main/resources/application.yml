@@ -19,3 +19,10 @@ gemini:
     api:
       key: ${GEMINI_API_KEY}
       url: ${GEMINI_API_URL:https://generativelanguage.googleapis.com/v1beta/models/gemini-3.1-flash-lite:generateContent}
+
+vnpay:
+  tmn-code: PDZMLYNC
+  hash-secret: MSA08BWS6F9GORPSS4H1Z5AJ2DEA7289
+  pay-url: https://sandbox.vnpayment.vn/paymentv2/vpcpay.html
+  return-url: http://localhost:5173/payment-result
+  ipn-url: http://localhost:8080/api/v1/payment/vnpay-ipn

@@ -26,6 +26,7 @@ public class SecurityConfig {
                 .authorizeHttpRequests(auth -> auth
                         // CHỈ THẢ CỬA cho các API liên quan đến Đăng ký, Đăng nhập
                         .requestMatchers("/api/v1/auth/**").permitAll()
+                        .requestMatchers("/api/v1/payment/vnpay-ipn").permitAll()
                         // CÁC API KHÁC (bao gồm api/v1/test/**) đều bắt buộc phải có Token hợp lệ
                         .anyRequest().authenticated()
                 )
