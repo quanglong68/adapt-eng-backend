@@ -8,6 +8,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
+import java.util.List;
 import java.util.Map;
 
 @RestController
@@ -31,5 +32,16 @@ public class PaymentController {
     @GetMapping("/vnpay-return")
     public ResponseEntity<Map<String, Object>> handleVnpayReturn(@RequestParam Map<String, String> params) {
         return ResponseEntity.ok(paymentService.handleVnpayReturn(params));
+    }
+
+    @PutMapping("/cancel/{transactionId}")
+    public ResponseEntity<Map<String, String>> cancelTransaction(@PathVariable Long transactionId) {
+        paymentService.cancelTransaction(transactionId);
+        return ResponseEntity.ok(Map.of("message", "Hủy giao dịch thành công."));
+    }
+
+    @GetMapping("/history")
+    public ResponseEntity<List<Map<String, Object>>> getTransactionHistory() {
+        return ResponseEntity.ok(paymentService.getTransactionHistory());
     }
 }

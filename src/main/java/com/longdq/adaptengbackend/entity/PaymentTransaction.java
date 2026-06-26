@@ -6,6 +6,8 @@ import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
+import java.time.LocalDateTime;
+
 @Entity
 @Table(name = "payment_transactions")
 @Data
@@ -33,4 +35,10 @@ public class PaymentTransaction {
 
     @Column(name = "transaction_code", unique = true)
     private String transactionCode;
+
+    @Column(name = "created_at")
+    private LocalDateTime createdAt;
+
+    @Column(name = "vnpay_url", columnDefinition = "TEXT")
+    private String vnpayUrl;
 }

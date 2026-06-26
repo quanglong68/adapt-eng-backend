@@ -1,6 +1,5 @@
 package com.longdq.adaptengbackend.aspect;
 
-import com.longdq.adaptengbackend.annotation.RequirePremium;
 import com.longdq.adaptengbackend.enums.SubscriptionStatus;
 import com.longdq.adaptengbackend.exception.ForbiddenException;
 import com.longdq.adaptengbackend.entity.User;
@@ -22,8 +21,10 @@ public class PremiumGuardAspect {
 
     private final UserSubscriptionRepository userSubscriptionRepository;
 
-    @Before("@annotation(requirePremium)")
-    public void checkPremiumAccess(RequirePremium requirePremium) {
+
+    @Before("@within(com.longdq.adaptengbackend.annotation.RequirePremium) || " +
+            "@annotation(com.longdq.adaptengbackend.annotation.RequirePremium)")
+    public void checkPremiumAccess() {
         User user = SecurityUtils.getCurrentUser();
         boolean hasPremium = userSubscriptionRepository.existsByUserIdAndStatusAndEndDateGreaterThan(
                 user.getId(),

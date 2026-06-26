@@ -4,6 +4,7 @@ import com.longdq.adaptengbackend.enums.KnowledgeType;
 import com.longdq.adaptengbackend.enums.Level;
 
 import java.util.Arrays;
+import java.util.List;
 import java.util.stream.Collectors;
 
 public final class AIPromptTemplates {
@@ -246,5 +247,62 @@ public final class AIPromptTemplates {
                 "7. \"explanation\": Giải thích tiếng Việt (Vì sao đúng, vì sao các đáp kia sai).\n" +
                 "8. \"knowledgeName\": Tên chủ điểm NGỮ PHÁP HOẶC KỸ NĂNG cực kỳ cụ thể bằng tiếng Việt. " +
                 "9. \"knowledgeType\": BẮT BUỘC CHỈ ĐƯỢC CHỌN MỘT TRONG CÁC GIÁ TRỊ ENUM SAU (Viết hoa chính xác): [" + allowedEnums + "].";
+    }
+
+    public static String buildVipEntertainmentPrompt(List<String> wordList) {
+        String wordsStr = String.join(", ", wordList);
+        int wordCount = wordList.size();
+
+        return String.format("""
+            Bạn là một Bậc thầy kể chuyện (Master Storyteller) kiêm Nhà tiên tri hệ "chữa lành".
+            DANH SÁCH TỪ VỰNG CẦN ÔN TẬP HÔM NAY (%d từ): %s
+
+            NHIỆM VỤ CỦA BẠN DỰA TRÊN SỐ LƯỢNG TỪ:
+            1. NẾU DANH SÁCH CHỈ CÓ 1 TỪ: Chỉ tạo MỘT câu dự đoán Tarot sử dụng từ đó. Cấu trúc "story" trong JSON PHẢI LÀ null.
+            2. NẾU DANH SÁCH CÓ 2 TỪ TRỞ LÊN: 
+               - Tự do phân tích và chọn ra MỘT từ phù hợp nhất trong danh sách (mang ý nghĩa tiên đoán, cảm xúc, chữa lành...) để làm câu Tarot.
+               - Sử dụng TẤT CẢ các từ CÒN LẠI để tạo MỘT câu chuyện ngắn. Mỗi từ còn lại phải được sử dụng làm một câu đục lỗ (has_blank = true) trong truyện.
+
+            ĐẠO LUẬT THÉP VỀ ĐẦU RA:
+            - Trả về DUY NHẤT một chuỗi JSON hợp lệ, bắt đầu bằng { và kết thúc bằng }.
+            - KHÔNG bọc JSON trong markdown (như ```json). KHÔNG thêm văn bản nào ngoài JSON.
+            - Phải đảm bảo đóng ngoặc chính xác tuyệt đối.
+
+            CẤU TRÚC JSON BẮT BUỘC (Copy y hệt format này):
+            {
+              "tarot": {
+                "target_word": "từ được chọn làm Tarot",
+                "word_meaning": "Nghĩa tiếng Việt ngắn gọn của từ đúng",
+                "english_sentence": "Một câu tiên đoán tích cực có chứa từ đúng, nhưng thay từ đúng bằng [blank].",
+                "options": ["từ đúng", "từ nhiễu 1", "từ nhiễu 2", "từ nhiễu 3"],
+                "vietnamese_translation": "Bản dịch tiếng Việt HOÀN CHỈNH VÀ TỰ NHIÊN của câu tiên đoán (BẮT BUỘC DỊCH LUÔN TỪ CẦN ĐIỀN SANG TIẾNG VIỆT, KHÔNG ĐƯỢC ĐỂ LẠI CHỮ [blank] HAY TỪ TIẾNG ANH NÀO)."
+              },
+              "story": // NẾU CHỈ CÓ 1 TỪ TRONG DANH SÁCH, TRƯỜNG NÀY BẮT BUỘC LÀ null. NẾU CÓ > 1 TỪ, TẠO OBJECT NHƯ DƯỚI ĐÂY:
+              {
+                "title": "Tên câu chuyện BẰNG TIẾNG ANH (Tuyệt đối không dùng tiếng Việt. VD: The Quantum Librarian, The Silent Forest...)",
+                "genre": "Thể loại (VD: Sci-Fi, Healing, Fairy Tale...)",
+                "sentences": [
+                  {
+                    "english_sentence": "Câu tiếng anh (Nếu chứa từ vựng cần kiểm tra thì thay từ đó bằng [blank])",
+                    "has_blank": true, // true nếu đục lỗ, false nếu câu dẫn truyện
+                    "target_word": "từ đúng từ danh sách", // Nếu has_blank là false thì để null
+                    "word_meaning": "Nghĩa tiếng Việt ngắn gọn của từ đúng", // Nếu has_blank là false thì để null
+                    "options": ["từ đúng", "từ nhiễu 1", "từ nhiễu 2", "từ nhiễu 3"], // Nếu has_blank là false thì để []
+                    "hint_translation": "Bản dịch tiếng Việt NHƯNG GIỮ NGUYÊN CHỮ [blank] (Dùng làm gợi ý). Ví dụ: 'Hệ thống yêu cầu được [blank] AI mới.' (Nếu has_blank = false thì để null)",
+                    "full_translation": "Bản dịch tiếng Việt HOÀN CHỈNH VÀ TỰ NHIÊN (Tuyệt đối không chêm tiếng Anh hay [blank] vào). Ví dụ: 'Hệ thống yêu cầu được gặp gỡ AI mới.'"
+                  },
+                  {
+                    "english_sentence": "Câu dẫn chuyện để kết nối logic.",
+                    "has_blank": false,
+                    "target_word": null,
+                    "word_meaning": null,
+                    "options": [],
+                    "hint_translation": null,
+                    "full_translation": "Bản dịch tiếng Việt đầy đủ."
+                  }
+                ]
+              }
+            }
+            """, wordCount, wordsStr);
     }
 }

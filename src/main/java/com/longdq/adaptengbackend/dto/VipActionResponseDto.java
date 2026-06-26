@@ -9,10 +9,10 @@ import lombok.NoArgsConstructor;
 @Builder
 @NoArgsConstructor
 @AllArgsConstructor
-public class CreatePaymentUrlResponseDto {
-
-    private String vnpayUrl;
-    private String transactionCode;
-    private boolean hasActiveVip;
-    private String warningMessage;
+public class VipActionResponseDto {
+    private boolean success;
+    private String message;
+    private Boolean locked;
+    private Integer currentCount;
+    private Integer maxCount;
 }

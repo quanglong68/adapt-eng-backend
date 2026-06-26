@@ -5,14 +5,15 @@ import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
+import java.time.LocalDate;
+
 @Data
 @Builder
 @NoArgsConstructor
 @AllArgsConstructor
-public class CreatePaymentUrlResponseDto {
-
-    private String vnpayUrl;
-    private String transactionCode;
-    private boolean hasActiveVip;
-    private String warningMessage;
+public class VipEntertainmentResponseDto {
+    private Long id;
+    private String contentJson;
+    private Boolean isCompleted;
+    private LocalDate entertainmentDate;
 }
