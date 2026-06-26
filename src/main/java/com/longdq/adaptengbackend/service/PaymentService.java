@@ -22,7 +22,6 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.text.SimpleDateFormat;
 import java.time.LocalDateTime;
-import java.time.format.DateTimeFormatter;
 import java.util.*;
 
 @Slf4j
@@ -42,6 +41,14 @@ public class PaymentService {
         SubscriptionPackage subscriptionPackage = subscriptionPackageRepository.findById(request.getPackageId())
                 .orElseThrow(() -> new ResourceNotFoundException("Gói đăng ký không tồn tại."));
 
+        // Check if user already has active VIP
+        boolean hasActiveVip = userSubscriptionRepository
+                .existsByUserIdAndStatusAndEndDateGreaterThan(
+                        user.getId(),
+                        SubscriptionStatus.ACTIVE,
+                        LocalDateTime.now()
+                );
+
         String transactionCode = generateTransactionCode();
 
         PaymentTransaction transaction = new PaymentTransaction();
@@ -50,40 +57,46 @@ public class PaymentService {
         transaction.setAmount(subscriptionPackage.getPrice());
         transaction.setStatus(PaymentStatus.PENDING);
         transaction.setTransactionCode(transactionCode);
-        paymentTransactionRepository.save(transaction);
+        transaction.setCreatedAt(LocalDateTime.now());
 
         // 1. Khởi tạo Map tham số (Gọn gàng, sạch sẽ)
         Map<String, String> vnpParams = new HashMap<>();
         vnpParams.put("vnp_Version", "2.1.0");
         vnpParams.put("vnp_Command", "pay");
-        vnpParams.put("vnp_TmnCode", vnpayProperties.getTmnCode()); // Hút từ file yml
+        vnpParams.put("vnp_TmnCode", vnpayProperties.getTmnCode());
         vnpParams.put("vnp_Amount", String.valueOf(subscriptionPackage.getPrice() * 100));
         vnpParams.put("vnp_CurrCode", "VND");
         vnpParams.put("vnp_TxnRef", transactionCode);
-
-        // Giữ lại bí quyết: Viết liền không dấu cách để chống lỗi URLEncoder
         vnpParams.put("vnp_OrderInfo", "ThanhToanVIP");
-
         vnpParams.put("vnp_OrderType", "other");
         vnpParams.put("vnp_Locale", "vn");
-        vnpParams.put("vnp_ReturnUrl", vnpayProperties.getReturnUrl()); // Hút từ file yml
-        vnpParams.put("vnp_IpAddr", "127.0.0.1"); // Vẫn giữ IP để test
+        vnpParams.put("vnp_ReturnUrl", vnpayProperties.getReturnUrl());
+        vnpParams.put("vnp_IpAddr", "127.0.0.1");
 
-        // 2. Ép múi giờ chuẩn GMT+7 của VNPAY
         Calendar cld = Calendar.getInstance(TimeZone.getTimeZone("Etc/GMT+7"));
         SimpleDateFormat formatter = new SimpleDateFormat("yyyyMMddHHmmss");
         vnpParams.put("vnp_CreateDate", formatter.format(cld.getTime()));
         cld.add(Calendar.MINUTE, 15);
         vnpParams.put("vnp_ExpireDate", formatter.format(cld.getTime()));
 
-        // 3. Giao cho VnpayUtil sinh link và băm chữ ký
         String finalUrl = vnpayUtil.buildPaymentUrl(vnpParams);
 
+        // Save vnpayUrl to transaction
+        transaction.setVnpayUrl(finalUrl);
+        paymentTransactionRepository.save(transaction);
+
         log.info("FINAL URL: " + finalUrl);
+
+        String warningMessage = null;
+        if (hasActiveVip) {
+            warningMessage = "Bạn đã có gói VIP đang hoạt động. Thanh toán gói mới sẽ cộng dồn thời gian VIP hiện tại.";
+        }
 
         return CreatePaymentUrlResponseDto.builder()
                 .vnpayUrl(finalUrl)
                 .transactionCode(transactionCode)
+                .hasActiveVip(hasActiveVip)
+                .warningMessage(warningMessage)
                 .build();
     }
 
@@ -104,7 +117,7 @@ public class PaymentService {
         PaymentTransaction transaction = paymentTransactionRepository.findByTransactionCode(transactionCode)
                 .orElseThrow(() -> new ResourceNotFoundException("Giao dịch không tồn tại."));
 
-        if (transaction.getStatus() == PaymentStatus.SUCCESS) {
+        if (transaction.getStatus() == PaymentStatus.SUCCESS || transaction.getStatus() == PaymentStatus.CANCELED) {
             response.put("RspCode", "00");
             response.put("Message", "Confirm Success");
             return response;
@@ -164,11 +177,11 @@ public class PaymentService {
 
         userSubscriptionRepository.save(subscription);
     }
+
     @Transactional
     public Map<String, Object> handleVnpayReturn(Map<String, String> params) {
         Map<String, Object> response = new HashMap<>();
 
-        // 1. Kiểm tra chữ ký bảo mật
         if (!vnpayUtil.validateSignature(params)) {
             response.put("success", false);
             response.put("message", "Chữ ký không hợp lệ, phát hiện nghi vấn giả mạo!");
@@ -178,36 +191,81 @@ public class PaymentService {
         String transactionCode = params.get("vnp_TxnRef");
         String responseCode = params.get("vnp_ResponseCode");
 
-        // 2. Lấy giao dịch từ DB
         PaymentTransaction transaction = paymentTransactionRepository.findByTransactionCode(transactionCode)
                 .orElseThrow(() -> new ResourceNotFoundException("Giao dịch không tồn tại."));
 
-        // 3. Nếu đơn đã xử lý rồi thì thôi (Chống trùng lặp)
         if (transaction.getStatus() == PaymentStatus.SUCCESS) {
             response.put("success", true);
             response.put("message", "Giao dịch đã được ghi nhận thành công từ trước.");
             return response;
         }
 
-        // 4. Nếu VNPAY báo thành công (00) -> Cấp VIP
+        if (transaction.getStatus() == PaymentStatus.CANCELED) {
+            response.put("success", false);
+            response.put("message", "Giao dịch đã bị hủy.");
+            return response;
+        }
+
         if ("00".equals(responseCode)) {
             transaction.setStatus(PaymentStatus.SUCCESS);
             paymentTransactionRepository.save(transaction);
-
-            activateOrExtendSubscription(transaction); // Tái sử dụng hàm cấp thẻ VIP có sẵn
-
+            activateOrExtendSubscription(transaction);
             response.put("success", true);
             response.put("message", "Thanh toán thành công. Đã nâng cấp VIP!");
         } else {
             transaction.setStatus(PaymentStatus.FAILED);
             paymentTransactionRepository.save(transaction);
-
             response.put("success", false);
             response.put("message", "Giao dịch thất bại hoặc đã bị hủy.");
         }
 
         return response;
     }
+
+    @Transactional
+    public void cancelTransaction(Long transactionId) {
+        User user = SecurityUtils.getCurrentUser();
+        PaymentTransaction transaction = paymentTransactionRepository.findById(transactionId)
+                .orElseThrow(() -> new ResourceNotFoundException("Giao dịch không tồn tại."));
+
+        if (!transaction.getUser().getId().equals(user.getId())) {
+            throw new RuntimeException("Bạn không có quyền hủy giao dịch này.");
+        }
+
+        if (transaction.getStatus() != PaymentStatus.PENDING) {
+            throw new RuntimeException("Chỉ có thể hủy giao dịch đang chờ thanh toán.");
+        }
+
+        // Check if 15 minutes have passed
+        if (transaction.getCreatedAt() != null &&
+                transaction.getCreatedAt().plusMinutes(15).isBefore(LocalDateTime.now())) {
+            throw new RuntimeException("Giao dịch đã quá thời gian hủy (15 phút).");
+        }
+
+        transaction.setStatus(PaymentStatus.CANCELED);
+        paymentTransactionRepository.save(transaction);
+        log.info("Transaction {} canceled by user {}", transaction.getTransactionCode(), user.getEmail());
+    }
+
+    public List<Map<String, Object>> getTransactionHistory() {
+        User user = SecurityUtils.getCurrentUser();
+        List<PaymentTransaction> transactions = paymentTransactionRepository.findByUserIdOrderByCreatedAtDesc(user.getId());
+
+        List<Map<String, Object>> result = new ArrayList<>();
+        for (PaymentTransaction t : transactions) {
+            Map<String, Object> item = new HashMap<>();
+            item.put("id", t.getId());
+            item.put("transactionCode", t.getTransactionCode());
+            item.put("amount", t.getAmount());
+            item.put("status", t.getStatus().name());
+            item.put("createdAt", t.getCreatedAt());
+            item.put("vnpayUrl", t.getVnpayUrl());
+            item.put("packageName", t.getSubscriptionPackage() != null ? t.getSubscriptionPackage().getName() : null);
+            result.add(item);
+        }
+        return result;
+    }
+
     private String generateTransactionCode() {
         return UUID.randomUUID().toString().replace("-", "").substring(0, 12).toUpperCase();
     }

@@ -66,6 +66,15 @@ public class AIService {
         }
     }
 
+    public String generateVipEntertainment(List<String> words) {
+        try {
+            return callGeminiAPI(AIPromptTemplates.buildVipEntertainmentPrompt(words));
+        } catch (Exception e) {
+            log.error("AI error during VIP entertainment generation: {}", e.getMessage(), e);
+            return null;
+        }
+    }
+
     private String callGeminiAPI(String prompt) {
         try {
             Map<String, Object> part = new HashMap<>();
