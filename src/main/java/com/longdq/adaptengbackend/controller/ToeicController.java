@@ -35,13 +35,35 @@ public class ToeicController {
     // ======================================================
     // 2. CÁC ENDPOINT PHỤC VỤ LUỒNG DAILY PRACTICE (SM-2 MAY ĐO)
     // ======================================================
-    @GetMapping("/practice/daily")
-    public ResponseEntity<List<ToeicPassageResponseDto>> getDailyToeicPractice() {
-        return ResponseEntity.ok(toeicPracticeService.generateDailyToeicTest());
+//    @GetMapping("/practice/daily")
+//    public ResponseEntity<List<ToeicPassageResponseDto>> getDailyToeicPractice() {
+//        return ResponseEntity.ok(toeicPracticeService.generateDailyToeicTest());
+//    }
+//
+//    @PostMapping("/practice/submit")
+//    public ResponseEntity<DailyReviewResultResponseDto> submitDailyToeicPractice(@RequestBody DailyReviewSubmissionRequestDto request) {
+//        return ResponseEntity.ok(toeicPracticeService.submitDailyToeicReview(request));
+//    }
+
+
+    @PutMapping("/practice/save-draft")
+    public ResponseEntity<Void> saveDailyPracticeDraft(@RequestBody SaveDraftRequestDto request) {
+        toeicPracticeService.saveDraft(request);
+        return ResponseEntity.ok().build();
     }
 
     @PostMapping("/practice/submit")
     public ResponseEntity<DailyReviewResultResponseDto> submitDailyToeicPractice(@RequestBody DailyReviewSubmissionRequestDto request) {
         return ResponseEntity.ok(toeicPracticeService.submitDailyToeicReview(request));
+    }
+
+    @GetMapping("/practice/daily")
+    public ResponseEntity<DailyPracticeSessionDto> getDailyToeicPractice() {
+        return ResponseEntity.ok(toeicPracticeService.getOrCreateDailyPractice());
+    }
+
+    @GetMapping("/practice/history")
+    public ResponseEntity<List<DailyPracticeHistoryDto>> getPracticeHistory() {
+        return ResponseEntity.ok(toeicPracticeService.getPracticeHistory());
     }
 }

@@ -152,11 +152,11 @@ public class VipService {
     @Transactional
     public VipActionResponseDto completeStory() {
         User user = SecurityUtils.getCurrentUser();
-        LocalDate today = LocalDate.now();
 
+        // ĐỔI SANG DÙNG HÀM TÌM KIẾM THEO TRẠNG THÁI CHƯA HOÀN THÀNH (BỎ QUA NGÀY THÁNG)
         VipDailyEntertainment entertainment = vipDailyEntertainmentRepository
-                .findByUserIdAndEntertainmentDate(user.getId(), today)
-                .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy nội dung giải trí hôm nay."));
+                .findFirstByUserIdAndIsCompletedOrderByIdAsc(user.getId(), false)
+                .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy nội dung giải trí đang làm dở."));
 
         if (Boolean.TRUE.equals(entertainment.getIsCompleted())) {
             return VipActionResponseDto.builder()
@@ -165,6 +165,7 @@ public class VipService {
                     .build();
         }
 
+        // Chốt sổ
         entertainment.setIsCompleted(true);
         vipDailyEntertainmentRepository.save(entertainment);
 
