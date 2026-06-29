@@ -12,6 +12,7 @@ import org.springframework.security.core.GrantedAuthority;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.core.userdetails.UserDetails;
 
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.Collection;
 import java.util.List;
@@ -53,6 +54,9 @@ public class User implements UserDetails {
     @Enumerated(EnumType.STRING)
     @Column(name = "learning_track")
     private LearningTrack learningTrack;
+
+    @Column(name = "last_level_up_test_date")
+    private LocalDate lastLevelUpTestDate;
 
     @Override
     public Collection<? extends GrantedAuthority> getAuthorities() {

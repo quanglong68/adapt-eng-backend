@@ -1,15 +1,18 @@
 package com.longdq.adaptengbackend.service;
 
 import com.longdq.adaptengbackend.dto.*;
+import com.longdq.adaptengbackend.entity.LevelPromotionConfig;
 import com.longdq.adaptengbackend.entity.Passage;
 import com.longdq.adaptengbackend.entity.Question;
 import com.longdq.adaptengbackend.entity.User;
 import com.longdq.adaptengbackend.entity.UserLearningProgress;
 import com.longdq.adaptengbackend.enums.Level;
 import com.longdq.adaptengbackend.enums.ToeicPart;
+import com.longdq.adaptengbackend.repository.LevelPromotionConfigRepository;
 import com.longdq.adaptengbackend.repository.PassageRepository;
 import com.longdq.adaptengbackend.repository.QuestionRepository;
 import com.longdq.adaptengbackend.repository.UserLearningProgressRepository;
+import com.longdq.adaptengbackend.repository.UserRepository;
 import com.longdq.adaptengbackend.util.KnowledgeDisplayNameUtil;
 import com.longdq.adaptengbackend.util.QuestionReviewBuilder;
 import com.longdq.adaptengbackend.util.SecurityUtils;
@@ -19,6 +22,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -33,6 +37,8 @@ public class ToeicTestService {
     private final QuestionRepository questionRepository;
     private final PassageRepository passageRepository;
     private final UserLearningProgressRepository progressRepository;
+    private final UserRepository userRepository;
+    private final LevelPromotionConfigRepository promotionConfigRepo;
 
     public List<ToeicPassageResponseDto> getToeicTestQuestions(Level level) {
         List<ToeicPassageResponseDto> finalResponseBlocks = new ArrayList<>();
@@ -65,13 +71,87 @@ public class ToeicTestService {
         }
     }
 
+    // ==============================================================
+    // LUỒNG NỘP BÀI TEST BÌNH THƯỜNG (ĐÁNH GIÁ NĂNG LỰC)
+    // ==============================================================
     @Transactional
     public TestSubmissionResponseDto submitToeicTest(TestSubmissionRequestDto request) {
         User user = SecurityUtils.getCurrentUser();
+
+        GradingResult result = gradeTestAnswers(request, user);
+        int totalQuestions = request.getAnswers().size();
+
+        TestLevelEvaluationUtil.LevelEvaluation evaluation =
+                TestLevelEvaluationUtil.evaluateSafeDivision(result.correctCount, totalQuestions, request.getTestedLevel());
+
+        TestSubmissionResponseDto response = new TestSubmissionResponseDto();
+        response.setTotalQuestions(totalQuestions);
+        response.setCorrectAnswers(result.correctCount);
+        response.setScorePercentage(evaluation.getScorePercentage());
+        response.setPassedThreshold(evaluation.isPassed());
+        response.setTestedLevel(request.getTestedLevel());
+        response.setRecommendedLevel(evaluation.getRecommendedLevel());
+        response.setReviewList(result.reviewList);
+
+        return response;
+    }
+
+    // ==============================================================
+    // LUỒNG NỘP BÀI TEST THĂNG CẤP (BOSS FIGHT)
+    // ==============================================================
+    @Transactional
+    public TestSubmissionResponseDto submitLevelUpTest(TestSubmissionRequestDto request) {
+        User user = SecurityUtils.getCurrentUser();
+
+        GradingResult result = gradeTestAnswers(request, user);
+        int totalQuestions = request.getAnswers().size();
+
+        int scorePercent = totalQuestions > 0 ? (result.correctCount * 100) / totalQuestions : 0;
+
+        LevelPromotionConfig config = promotionConfigRepo.findById(request.getTestedLevel())
+                .orElseThrow(() -> new RuntimeException("Thiếu config thăng cấp trong DB cho level: " + request.getTestedLevel()));
+
+        TestSubmissionResponseDto response = new TestSubmissionResponseDto();
+        response.setTotalQuestions(totalQuestions);
+        response.setCorrectAnswers(result.correctCount);
+        response.setScorePercentage(scorePercent);
+        response.setTestedLevel(request.getTestedLevel());
+        response.setRecommendedLevel(null);
+        response.setReviewList(result.reviewList);
+
+        if (scorePercent >= config.getPassingScorePercent()) {
+            // WIN BOSS
+            user.setCurrentLevel(request.getTestedLevel());
+            user.setLastLevelUpTestDate(null);
+            response.setPassedThreshold(true);
+        } else {
+            // LOSE BOSS
+            user.setLastLevelUpTestDate(LocalDate.now());
+            response.setPassedThreshold(false);
+        }
+
+        userRepository.save(user);
+        return response;
+    }
+
+    // ==============================================================
+    // CÁC HÀM HELPER DÙNG CHUNG
+    // ==============================================================
+
+    private static class GradingResult {
+        int correctCount;
+        List<QuestionReviewDto> reviewList;
+
+        public GradingResult(int correctCount, List<QuestionReviewDto> reviewList) {
+            this.correctCount = correctCount;
+            this.reviewList = reviewList;
+        }
+    }
+
+    private GradingResult gradeTestAnswers(TestSubmissionRequestDto request, User user) {
         List<QuestionReviewDto> reviewList = new ArrayList<>();
         Map<String, UserLearningProgress> progressCache = new HashMap<>();
 
-        int totalQuestions = request.getAnswers().size();
         int correctCount = 0;
 
         List<Long> questionIds = request.getAnswers().stream()
@@ -102,20 +182,6 @@ public class ToeicTestService {
         }
 
         progressRepository.saveAll(progressCache.values());
-
-        TestLevelEvaluationUtil.LevelEvaluation evaluation =
-                TestLevelEvaluationUtil.evaluateSafeDivision(correctCount, totalQuestions, request.getTestedLevel());
-
-        TestSubmissionResponseDto response = new TestSubmissionResponseDto();
-        response.setTotalQuestions(totalQuestions);
-        response.setCorrectAnswers(correctCount);
-        response.setScorePercentage(evaluation.getScorePercentage());
-        response.setPassedThreshold(evaluation.isPassed());
-        response.setTestedLevel(request.getTestedLevel());
-        response.setRecommendedLevel(evaluation.getRecommendedLevel());
-        response.setSystemMessage(evaluation.getSystemMessage());
-        response.setReviewList(reviewList);
-
-        return response;
+        return new GradingResult(correctCount, reviewList);
     }
 }

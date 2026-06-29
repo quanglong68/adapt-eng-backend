@@ -13,4 +13,6 @@ public class DailyReviewResultResponseDto {
     private int totalQuestions;
     private int correctAnswers;
     private List<QuestionReviewDto> reviewList;
+    private boolean isValidEffort;
+    private int earnedXp;
 }

@@ -41,6 +41,7 @@ public class ToeicPracticeService {
     private final DataSyncService dataSyncService;
     private final DailyTestRecordRepository recordRepository;
     private final ObjectMapper objectMapper;
+    private final AppConfigRepository appConfigRepository;
 
     // TIÊM UTIL XỊN VÀO ĐÂY
     private final PremiumCheckUtil premiumCheckUtil;
@@ -113,6 +114,7 @@ public class ToeicPracticeService {
             todayRecord.setUserId(user.getId());
             todayRecord.setTestDate(today);
             todayRecord.setStatus(TestRecordStatus.IN_PROGRESS);
+            todayRecord.setLevel(user.getCurrentLevel());
 
             int totalQ = testContent.stream()
                     .mapToInt(block -> block.getQuestions().size())
@@ -185,15 +187,26 @@ public class ToeicPracticeService {
 
         int correctCount = 0;
         int totalEarnedXp = 0;
+        int totalQuestions = request.getAnswers().size();
 
         for (UserAnswerDto answer : request.getAnswers()) {
             Question question = questionMap.get(answer.getQuestionId());
             if (question == null) continue;
 
-            boolean isCorrect = question.getCorrectAnswer().equalsIgnoreCase(answer.getSelectedAnswer());
-            if (isCorrect) correctCount++;
-            totalEarnedXp += isCorrect ? 10 : 2;
+            // Xử lý logic Điểm & XP
+            boolean isBlank = answer.getSelectedAnswer() == null || answer.getSelectedAnswer().trim().isEmpty();
+            boolean isCorrect = !isBlank && question.getCorrectAnswer().equalsIgnoreCase(answer.getSelectedAnswer());
 
+            if (isCorrect) {
+                correctCount++;
+                totalEarnedXp += 10; // Đúng: +10 XP
+            } else if (!isBlank) {
+                totalEarnedXp += 2;  // Sai (nhưng có làm): +2 XP
+            } else {
+                totalEarnedXp += 0;  // Bỏ trống: 0 XP
+            }
+
+            // ... (Đoạn ghi lịch sử UserQuestionHistory và Progress SM-2 giữ nguyên không đổi) ...
             UserQuestionHistory history = new UserQuestionHistory();
             history.setUserId(user.getId());
             history.setQuestionId(question.getId());
@@ -206,7 +219,6 @@ public class ToeicPracticeService {
 
             if (knowledgeId != null || targetWord != null) {
                 String cacheKey = ProgressCacheKeyUtil.buildKey(knowledgeId, targetWord);
-
                 if (!processedSm2KeysThisSession.contains(cacheKey)) {
                     UserLearningProgress progress = DailyReviewProgressHelper.resolveOrCreateProgress(
                             user, question, progressCache, progressRepository, question.getToeicPart());
@@ -215,7 +227,6 @@ public class ToeicPracticeService {
                 }
             }
 
-            // Gói hàng Review Full (Có giải thích)
             results.add(QuestionReviewBuilder.build(
                     question,
                     answer.getSelectedAnswer(),
@@ -226,12 +237,34 @@ public class ToeicPracticeService {
         userQuestionHistoryRepository.saveAll(historiesToSave);
         progressRepository.saveAll(progressCache.values());
 
-        user.setTotalXp(user.getTotalXp() + totalEarnedXp);
+        // ========================================================
+        // ÁP DỤNG LUẬT 10% CHỐNG SPAM (Lấy từ DB)
+        // ========================================================
+        int scorePercent = totalQuestions > 0 ? (correctCount * 100) / totalQuestions : 0;
+
+        // Lấy con số 10 từ Database (Nếu không có thì mặc định là 10)
+        int minScorePercent = appConfigRepository.findById("MIN_PRACTICE_SCORE_PERCENT")
+                .map(config -> Integer.parseInt(config.getConfigValue()))
+                .orElse(10);
+
+        boolean isValidEffort = scorePercent >= minScorePercent;
+
+        if (isValidEffort) {
+            user.setTotalXp(user.getTotalXp() + totalEarnedXp);
+        } else {
+            // TƯỚC QUYỀN NHẬN XP
+            totalEarnedXp = 0;
+            log.warn("User {} nộp bài không đạt chuẩn ({}%). Hủy toàn bộ XP kiếm được.", user.getEmail(), scorePercent);
+        }
         userRepository.save(user);
 
         // 2. CHỐT SỔ ĐỀ THI VÀO DATABASE
         record.setStatus(TestRecordStatus.COMPLETED);
         record.setScore(correctCount);
+
+        // QUAN TRỌNG: Ghi lại Level lúc user làm bài này để sau này check phong độ 7 ngày!
+        record.setLevel(user.getCurrentLevel());
+
         try {
             Map<Long, String> answerMap = request.getAnswers().stream()
                     .collect(Collectors.toMap(UserAnswerDto::getQuestionId, UserAnswerDto::getSelectedAnswer));
@@ -244,7 +277,8 @@ public class ToeicPracticeService {
         record.setUpdatedAt(now);
         recordRepository.save(record);
 
-        return new DailyReviewResultResponseDto(request.getAnswers().size(), correctCount, results);
+        // Trả thêm isValidEffort và totalEarnedXp về cho Frontend hiện thông báo
+        return new DailyReviewResultResponseDto(totalQuestions, correctCount, results, isValidEffort, totalEarnedXp);
     }
 
     // =========================================================================

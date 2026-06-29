@@ -1,5 +1,6 @@
 package com.longdq.adaptengbackend.entity;
 
+import com.longdq.adaptengbackend.enums.Level;
 import com.longdq.adaptengbackend.enums.TestRecordStatus;
 import jakarta.persistence.*;
 import lombok.Data;
@@ -45,4 +46,8 @@ public class DailyTestRecord {
 
     @Column(name = "updated_at")
     private LocalDateTime updatedAt = LocalDateTime.now();
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "level", nullable = false)
+    private Level level;
 }

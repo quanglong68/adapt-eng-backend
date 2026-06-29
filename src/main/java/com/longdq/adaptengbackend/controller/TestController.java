@@ -5,6 +5,7 @@ import com.longdq.adaptengbackend.dto.SetLevelRequestDto;
 import com.longdq.adaptengbackend.dto.TestSubmissionRequestDto;
 import com.longdq.adaptengbackend.dto.TestSubmissionResponseDto;
 import com.longdq.adaptengbackend.enums.Level;
+
 import com.longdq.adaptengbackend.service.TestService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
@@ -18,16 +19,16 @@ import java.util.List;
 @CrossOrigin(origins = "*")
 public class TestController {
     private final TestService testService;
-    @GetMapping("/generate/{level}")
-    public ResponseEntity<List<QuestionResponseDto>> getTest(@PathVariable Level level) {
-        return ResponseEntity.ok(testService.getTestQuestions(level));
-    }
-
-    // 2. Nộp bài và chấm điểm
-    @PostMapping("/submit")
-    public ResponseEntity<TestSubmissionResponseDto> submitTest(@RequestBody TestSubmissionRequestDto request) {
-        return ResponseEntity.ok(testService.submitTest(request));
-    }
+//    @GetMapping("/generate/{level}")
+//    public ResponseEntity<List<QuestionResponseDto>> getTest(@PathVariable Level level) {
+//        return ResponseEntity.ok(testService.getTestQuestions(level));
+//    }
+//
+//    // 2. Nộp bài và chấm điểm
+//    @PostMapping("/submit")
+//    public ResponseEntity<TestSubmissionResponseDto> submitTest(@RequestBody TestSubmissionRequestDto request) {
+//        return ResponseEntity.ok(testService.submitTest(request));
+//    }
 
     // 3. Chốt trình độ thực tế
     @PostMapping("/set-level")

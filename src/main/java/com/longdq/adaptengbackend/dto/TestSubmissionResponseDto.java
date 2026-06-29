@@ -17,6 +17,5 @@ public class TestSubmissionResponseDto {
     private boolean passedThreshold;
     private Level testedLevel;
     private Level recommendedLevel;
-    private String systemMessage;
     private List<QuestionReviewDto> reviewList;
 }

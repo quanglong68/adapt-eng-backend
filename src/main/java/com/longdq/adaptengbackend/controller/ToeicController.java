@@ -2,6 +2,7 @@ package com.longdq.adaptengbackend.controller;
 
 import com.longdq.adaptengbackend.dto.*;
 import com.longdq.adaptengbackend.enums.Level;
+import com.longdq.adaptengbackend.scheduler.QuestionTestGeneratorJob;
 import com.longdq.adaptengbackend.service.ToeicPracticeService;
 import com.longdq.adaptengbackend.service.ToeicTestService;
 import lombok.RequiredArgsConstructor;
@@ -65,5 +66,26 @@ public class ToeicController {
     @GetMapping("/practice/history")
     public ResponseEntity<List<DailyPracticeHistoryDto>> getPracticeHistory() {
         return ResponseEntity.ok(toeicPracticeService.getPracticeHistory());
+    }
+    @PostMapping("/test/level-up/submit")
+    public ResponseEntity<TestSubmissionResponseDto> submitLevelUpTest(@RequestBody TestSubmissionRequestDto request) {
+        return ResponseEntity.ok(toeicTestService.submitLevelUpTest(request));
+    }
+
+    private final QuestionTestGeneratorJob testGeneratorJob;
+    @PostMapping("/admin/force-generate/{level}")
+    public ResponseEntity<String> forceGenerateTest(@PathVariable Level level) {
+        // Mở một Thread riêng (Chạy ngầm) để không bị block Time-out Postman
+        new Thread(() -> {
+            try {
+                System.out.println("🚀 [DEV] Bắt đầu Force Generate đề thi TOEIC cho level: " + level);
+                testGeneratorJob.generateToeicTestForOneLevel(level);
+                System.out.println("✅ [DEV] Đã Generate thành công 50 câu cho level: " + level);
+            } catch (Exception e) {
+                System.err.println("❌ [DEV] Lỗi khi Generate: " + e.getMessage());
+            }
+        }).start();
+
+        return ResponseEntity.ok("Đã nhận lệnh! Server đang gọi AI để đẻ đề thi " + level + " (khoảng 3-5 phút). Vui lòng check màn hình Console (Terminal) của Backend để xem tiến độ.");
     }
 }
