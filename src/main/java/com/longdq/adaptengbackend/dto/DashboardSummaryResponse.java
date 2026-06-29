@@ -13,6 +13,9 @@ public class DashboardSummaryResponse {
     private long dailyMissionCount;
     private List<RecentActivityDto> recentActivities;
 
+    // 🚨 THÊM FIELD NÀY
+    private LevelUpProgressDto levelUpProgress;
+
     @Data
     @Builder
     public static class RecentActivityDto {
@@ -21,5 +24,19 @@ public class DashboardSummaryResponse {
         private int total;
         private String color;
         private String time;
+    }
+
+    // 🚨 THÊM CLASS NÀY ĐỂ CHỨA DATA THANH TIẾN TRÌNH
+    @Data
+    @Builder
+    public static class LevelUpProgressDto {
+        private String targetLevel;
+        private boolean isEligibleForBoss;
+        private int currentTotalXp;
+        private int requiredTotalXp;
+        private int current7DayAccuracy;
+        private int required7DayAccuracy;
+        private boolean isCooldownActive;
+        private int daysLeftToRetry;
     }
 }
