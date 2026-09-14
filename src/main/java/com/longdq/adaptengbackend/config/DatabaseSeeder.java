@@ -22,13 +22,31 @@ public class DatabaseSeeder implements CommandLineRunner {
 
     @Override
     public void run(String... args) throws Exception {
-        // 1. Chèn cấu hình AppConfig (Quy định 10% chống Spam)
-        if (appConfigRepository.count() == 0) {
-            log.info("Seeding AppConfig data...");
-            appConfigRepository.save(new AppConfig("MIN_PRACTICE_SCORE_PERCENT", "10"));
+
+        // 1. CHÈN DỮ LIỆU CẤU HÌNH HỆ THỐNG (APP CONFIGS)
+        log.info("Checking and seeding AppConfig data...");
+        List<AppConfig> defaultConfigs = List.of(
+                new AppConfig("MIN_PRACTICE_SCORE_PERCENT", "10"),
+
+                // --- Cấu hình cho tính năng VIP Deep Dive ---
+                new AppConfig("VIP_DEEP_DIVE_DAILY_QUOTA", "3"),
+                new AppConfig("DEEP_DIVE_EXCELLENT_THRESHOLD", "80"),
+                new AppConfig("DEEP_DIVE_GOOD_THRESHOLD", "50"),
+                new AppConfig("DEEP_DIVE_EXCELLENT_EF_BONUS", "0.3"),
+                new AppConfig("DEEP_DIVE_GOOD_EF_BONUS", "0.2"),
+                new AppConfig("DEEP_DIVE_POOR_EF_BONUS", "0.1"),
+                new AppConfig("DEEP_DIVE_POOR_INTERVAL", "1")
+        );
+
+        for (AppConfig config : defaultConfigs) {
+            // Kiểm tra xem Key này đã có trong DB chưa, nếu chưa thì mới lưu
+            if (!appConfigRepository.existsById(config.getConfigKey())) {
+                appConfigRepository.save(config);
+                log.info("Seeded config: {}", config.getConfigKey());
+            }
         }
 
-        // 2. Chèn cấu hình Thăng cấp theo chuẩn Cambridge XP
+        // 2. CHÈN CẤU HÌNH THĂNG CẤP THEO CHUẨN CAMBRIDGE (LEVEL PROMOTIONS)
         if (levelPromotionConfigRepository.count() == 0) {
             log.info("Seeding LevelPromotionConfig data...");
             List<LevelPromotionConfig> configs = List.of(

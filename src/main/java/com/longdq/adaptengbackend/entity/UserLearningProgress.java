@@ -40,6 +40,10 @@ public class UserLearningProgress {
     @Column(name = "interval_days")
     private Integer intervalDays = 1;
 
+    // Thêm vào UserLearningProgress.java
+    @Column(name = "last_review_date")
+    private LocalDateTime lastReviewDate;
+
     @Column(name = "next_review_date")
     private LocalDateTime nextReviewDate;
 
@@ -50,4 +54,6 @@ public class UserLearningProgress {
     @Enumerated(EnumType.STRING)
     @Column(name = "toeic_part")
     private ToeicPart toeicPart;
+
+
 }

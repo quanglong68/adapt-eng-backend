@@ -42,4 +42,19 @@ public interface UserLearningProgressRepository extends JpaRepository<UserLearni
     // Đếm số lượng tiến độ học tập đã đến hạn hoặc quá hạn ôn tập của 1 user
     long countByUserIdAndNextReviewDateLessThanEqual(UUID userId, LocalDateTime dateTime);
 
+    // Thêm hàm này vào UserLearningProgressRepository.java
+
+    @org.springframework.data.jpa.repository.Query("SELECT p FROM UserLearningProgress p " +
+            "WHERE p.user.id = :userId " +
+            "AND p.easeFactor < 2.5 " +
+            // Nếu chưa học lần nào (IS NULL) hoặc đã học cách đây quá 48 tiếng
+            "AND (p.lastReviewDate IS NULL OR p.lastReviewDate < :thresholdDate) " +
+            "ORDER BY p.easeFactor ASC")
+    java.util.List<com.longdq.adaptengbackend.entity.UserLearningProgress> findTopWeaknessesForDeepDive(
+            @org.springframework.data.repository.query.Param("userId") java.util.UUID userId,
+            @org.springframework.data.repository.query.Param("thresholdDate") java.time.LocalDateTime thresholdDate,
+            org.springframework.data.domain.Pageable pageable
+    );
+
+
 }

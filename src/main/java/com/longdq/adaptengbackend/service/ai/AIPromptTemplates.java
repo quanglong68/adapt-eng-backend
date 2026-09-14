@@ -48,7 +48,114 @@ public final class AIPromptTemplates {
                 "INFERENCE, CROSS_REFERENCING, NOT_TRUE_QUESTION, SENTENCE_INSERTION";
     }
 
-    public static String buildToeicPart5Prompt(Level level, KnowledgeType specificType, String targetWord) {
+    // =================================================================================================
+    // 🚀 BỘ 3 PROMPT VIP DEEP DIVE (ÔN TẬP CHUYÊN SÂU - CHỐNG HỌC VẸT)
+    // =================================================================================================
+
+    public static String buildDeepDiveVocabularyPrompt(Level level, KnowledgeType specificType, String targetWord) {
+        return String.format("""
+            Đóng vai chuyên gia ra đề thi TOEIC và chuyên gia ngôn ngữ học. Nhiệm vụ: Tạo 1 Bộ đề ÔN TẬP CHUYÊN SÂU (Vocabulary Deep Dive) gồm ĐÚNG 10 câu hỏi trắc nghiệm tiếng Anh cho TỪ VỰNG: '%s'. Trọng tâm (KnowledgeType): '%s'. Độ khó: %s.
+
+            ĐẠO LUẬT THÉP VỀ SỰ ĐA DẠNG (CHỐNG HỌC VẸT):
+            Tuyệt đối KHÔNG tạo 10 câu nhàm chán chỉ bắt điền từ '%s'. Bạn BẮT BUỘC phải phân bổ 10 câu theo đúng cấu trúc siêu đa dạng sau:
+            1. [2 câu] Trực diện (Definition/Usage): Đục lỗ chỗ trống là từ '%s' (hoặc các dạng chia thì/số nhiều của nó).
+            2. [2 câu] Từ đồng nghĩa/Trái nghĩa ngữ cảnh: Từ '%s' ĐÃ CÓ SẴN trong câu hỏi. Yêu cầu chọn từ ở đáp án có thể thay thế hoàn hảo cho nó.
+            3. [2 câu] Dạng từ (Word Family): Đục lỗ, 4 đáp án là 4 dạng từ (Noun, Verb, Adj, Adv) của '%s'. Yêu cầu điền đúng ngữ pháp.
+            4. [2 câu] Cụm từ/Giới từ đi kèm (Collocations/Prepositions): Từ '%s' ĐÃ CÓ SẴN. Chỗ trống là giới từ hoặc động từ/danh từ ghép thường đi kèm với nó trong môi trường công sở.
+            5. [2 câu] Tìm lỗi sai (Error Identification): Cho 4 câu hoàn chỉnh ở 4 đáp án (A, B, C, D). Câu hỏi là: "Câu nào dưới đây sử dụng từ '%s' (hoặc Word family của nó) SAI ngữ pháp hoặc ngữ cảnh?". Đáp án đúng là câu bị viết SAI.
+
+            ĐẦU RA BẮT BUỘC:
+            Trả về DUY NHẤT một mảng JSON (JSON Array). KHÔNG bọc mã markdown.
+            Mỗi object chứa:
+            - "questionType": Luôn là "MULTIPLE_CHOICE".
+            - "content": Nội dung câu hỏi.
+            - "options": Mảng đúng 4 chuỗi.
+            - "correctAnswer": Đáp án đúng (khớp 100%% với options).
+            - "explanation": ĐẠO LUẬT THÉP - BẮT BUỘC trình bày chính xác theo format sau (Phải dùng kí tự '\\n' để xuống dòng, KHÔNG ấn enter trực tiếp):
+            [Dạng câu hỏi]\\n✅ Đáp án đúng: [Giải thích cực kỳ chi tiết tại sao đúng].\\n❌ Các đáp án sai:\\n- [Đáp án 1]: [Lý do sai].\\n- [Đáp án 2]: [Lý do sai].\\n- [Đáp án 3]: [Lý do sai].
+            - "knowledgeName": Tên chủ điểm (Ví dụ: "Từ vựng: %s").
+            - "knowledgeType": BẮT BUỘC LÀ "%s".
+            - "targetWord": BẮT BUỘC LÀ "%s".
+            """, targetWord, specificType.name(), level.name(), targetWord, targetWord, targetWord, targetWord, targetWord, targetWord, specificType.name(), specificType.name(), targetWord);
+    }
+
+    public static String buildDeepDiveGrammarPrompt(Level level, KnowledgeType specificType) {
+        return String.format("""
+            Đóng vai chuyên gia ra đề thi TOEIC. Nhiệm vụ: Tạo 1 Bộ đề ÔN TẬP CHUYÊN SÂU (Grammar Deep Dive) gồm ĐÚNG 10 câu hỏi trắc nghiệm tiếng Anh cho CHỦ ĐIỂM NGỮ PHÁP: '%s'. Độ khó: %s.
+
+            ĐẠO LUẬT THÉP VỀ SỰ ĐA DẠNG (CHỐNG HỌC VẸT):
+            Tuyệt đối KHÔNG tạo 10 câu đục lỗ đơn giản chỉ nhìn dấu hiệu nhận biết là làm được. BẮT BUỘC phân bổ như sau:
+            1. [3 câu] Điền từ cơ bản: Nhận diện và áp dụng đúng cấu trúc '%s' trong câu đơn.
+            2. [3 câu] Viết lại câu đồng nghĩa (Sentence Transformation): Câu hỏi cho sẵn 1 câu hoàn chỉnh. 4 đáp án là 4 cách viết lại câu đó. Yêu cầu chọn đáp án viết lại ĐÚNG ngữ pháp '%s' và giữ nguyên nghĩa.
+            3. [2 câu] Tìm lỗi sai: Cho 4 câu hoàn chỉnh ở 4 đáp án (A, B, C, D). Yêu cầu tìm ra câu viết SAI cấu trúc '%s'.
+            4. [2 câu] Ngữ pháp Ngữ cảnh (Contextual Grammar): Đưa ra một đoạn hội thoại hoặc văn bản ngắn (2-3 câu). Bắt người đọc phải hiểu ngữ nghĩa của toàn đoạn mới chia đúng được ngữ pháp '%s' (Bẫy: Cố tình loại bỏ các trạng từ chỉ thời gian rõ ràng).
+
+            ĐẦU RA BẮT BUỘC:
+            Trả về DUY NHẤT một mảng JSON (JSON Array). KHÔNG bọc mã markdown.
+            Mỗi object chứa:
+            - "questionType": Luôn là "MULTIPLE_CHOICE".
+            - "content": Nội dung câu hỏi. (Dùng \\n nếu cần xuống dòng).
+            - "options": Mảng đúng 4 chuỗi.
+            - "correctAnswer": Đáp án đúng (khớp 100%% với options).
+            - "explanation": ĐẠO LUẬT THÉP - BẮT BUỘC trình bày chính xác theo format sau (Dùng kí tự '\\n' để xuống dòng):
+            [Dạng câu hỏi]\\n✅ Đáp án đúng: [Giải thích tại sao đúng].\\n❌ Các đáp án sai:\\n- [Đáp án 1]: [Lý do sai].\\n- [Đáp án 2]: [Lý do sai].\\n- [Đáp án 3]: [Lý do sai].
+            - "knowledgeName": Tên chủ điểm ngữ pháp bằng tiếng Việt.
+            - "knowledgeType": BẮT BUỘC LÀ "%s".
+            - "targetWord": ĐẠO LUẬT THÉP LÀ PHẢI ĐỂ null.
+            """, specificType.name(), level.name(), specificType.name(), specificType.name(), specificType.name(), specificType.name(), specificType.name());
+    }
+
+    public static String buildDeepDiveReadingPrompt(Level level, KnowledgeType specificType) {
+        String allowedReadingEnums = getPart7AllowedEnums();
+
+        return String.format("""
+            Đóng vai chuyên gia ra đề thi TOEIC Part 7. Nhiệm vụ: User đang cực kỳ YẾU kỹ năng đọc hiểu: '%s'. Bạn phải tạo 1 Bộ đề ÔN TẬP CHUYÊN SÂU (Reading Deep Dive) để rèn luyện kỹ năng này. Độ khó: %s.
+
+            YÊU CẦU CẤU TRÚC:
+            Tạo ra ĐÚNG 2 ĐOẠN VĂN BẢN (Passages) mang văn phong công sở/thương mại (Email, Memo, Article...).
+            - Passage 1: Đi kèm đúng 5 câu hỏi.
+            - Passage 2: Đi kèm đúng 5 câu hỏi.
+            Tổng cộng đúng 10 câu hỏi.
+
+            ĐẠO LUẬT THÉP VỀ KỸ NĂNG:
+            1. SIÊU TẬP TRUNG: Trong tổng 10 câu hỏi, BẮT BUỘC phải có ÍT NHẤT 6 CÂU test TRỰC TIẾP kỹ năng '%s'. 
+               (Ví dụ: Nếu là AUTHOR_PURPOSE, phải liên tục hỏi 'Mục đích của email là gì?', 'Tại sao ông A viết thư này?').
+            2. 4 câu còn lại có thể test các kỹ năng đọc hiểu khác trong danh sách sau: [%s].
+            3. TUYỆT ĐỐI KHÔNG hỏi ngữ pháp. Chỉ kiểm tra kỹ năng Đọc hiểu (Reading Comprehension).
+
+            ĐẦU RA BẮT BUỘC (JSON Object chứa mảng passages):
+            Trả về DUY NHẤT một JSON Object. KHÔNG bọc mã markdown.
+            {
+              "passages": [
+                {
+                  "passageContent": "Nội dung bài đọc 1... (Dùng \\n để xuống dòng)",
+                  "questions": [
+                    {
+                      "content": "Câu hỏi số 1...",
+                      "options": ["A", "B", "C", "D"],
+                      "correctAnswer": "A",
+                      "explanation": "[Kỹ năng Đọc hiểu]\\n✅ Đáp án đúng: [Trích dẫn câu trong bài để chứng minh].\\n❌ Các đáp án sai:\\n- [B]: [Lý do sai].\\n- [C]: [Lý do sai].\\n- [D]: [Lý do sai]. (LƯU Ý: Phải dùng kí tự '\\n' để xuống dòng)",
+                      "knowledgeName": "Tên kỹ năng bằng Tiếng Việt (VD: Tìm ý chính)",
+                      "knowledgeType": "PHẢI LÀ '%s' hoặc 1 trong các enum Reading",
+                      "targetWord": null
+                    }
+                    // ... 4 câu nữa
+                  ]
+                },
+                {
+                  "passageContent": "Nội dung bài đọc 2...",
+                  "questions": [ /* 5 câu hỏi tương tự */ ]
+                }
+              ]
+            }
+            """, specificType.name(), level.name(), specificType.name(), allowedReadingEnums, specificType.name());
+    }
+
+    // =================================================================================================
+    // CÁC HÀM PROMPT CŨ (GIỮ NGUYÊN)
+    // =================================================================================================
+
+    public static String buildToeicPart5Prompt(Level level, KnowledgeType specificType, String targetWord, int quantity) {
         boolean isDailySpaced = (specificType != null && targetWord != null);
         String allowedEnums = getPart5AllowedEnums();
 
@@ -57,11 +164,11 @@ public final class AIPromptTemplates {
                 : "- Distribute questions evenly between Grammar and Vocabulary items.";
 
         return String.format("""
-            You are an expert ETS TOEIC test creator. Generate exactly 15 incomplete sentences for TOEIC Part 5 at English difficulty level: %s.
+            You are an expert ETS TOEIC test creator. Generate exactly %d incomplete sentences for TOEIC Part 5 at English difficulty level: %s.
             
             Strict constraints:
             %s
-            - Total questions: Exactly 15.
+            - Total questions: Exactly %d.
             - All questions must be valid multiple choice with 4 options.
             
             MANDATORY OBJECT FIELDS (EVERY question object MUST contain):
@@ -85,7 +192,7 @@ public final class AIPromptTemplates {
                 "targetWord": "postpone"
               }
             ]
-            """, level.name(), conditionPrompt, allowedEnums);
+            """, quantity, level.name(), conditionPrompt, quantity, allowedEnums);
     }
 
     public static String buildToeicPart6Prompt(Level level, KnowledgeType sm2Type, String sm2TargetWord) {
