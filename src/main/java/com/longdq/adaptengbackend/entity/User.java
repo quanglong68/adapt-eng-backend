@@ -58,6 +58,17 @@ public class User implements UserDetails {
     @Column(name = "last_level_up_test_date")
     private LocalDate lastLevelUpTestDate;
 
+    @Enumerated(EnumType.STRING)
+    @Column(name = "writing_current_level")
+    private Level writingCurrentLevel;
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "writing_target_level")
+    private Level writingTargetLevel;
+
+    @Column(name = "last_writing_placement_date")
+    private LocalDate lastWritingPlacementDate;
+
     @Override
     public Collection<? extends GrantedAuthority> getAuthorities() {
         return List.of(new SimpleGrantedAuthority("ROLE_USER"));

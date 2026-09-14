@@ -34,18 +34,25 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
     ) throws ServletException, IOException {
 
         // 1. Lấy chuỗi token từ header "Authorization"
-        final String authHeader = request.getHeader("Authorization");
-        final String jwt;
+        String authHeader = request.getHeader("Authorization");
+        String jwt = null;
         final String userEmail;
 
-        // 2. Nếu không có header hoặc không bắt đầu bằng "Bearer ", cho đi tiếp (có thể là request đăng nhập/đăng ký)
-        if (authHeader == null || !authHeader.startsWith("Bearer ")) {
+        // 2. KIỂM TRA HEADER HOẶC THAM SỐ URL (DÀNH CHO SSE)
+        if (authHeader != null && authHeader.startsWith("Bearer ")) {
+            jwt = authHeader.substring(7); // Lấy từ Header
+        } else {
+            String tokenParam = request.getParameter("token");
+            if (tokenParam != null && !tokenParam.isEmpty()) {
+                jwt = tokenParam; // Lấy từ tham số URL (?token=...)
+            }
+        }
+
+        // 3. Nếu vẫn không có token ở cả 2 nơi -> Cho đi tiếp (chặn hay không do SecurityConfig quyết định)
+        if (jwt == null) {
             filterChain.doFilter(request, response);
             return;
         }
-
-        // 3. Cắt lấy chuỗi token (Bỏ chữ "Bearer " đi)
-        jwt = authHeader.substring(7);
 
         try {
             userEmail = jwtService.extractUsername(jwt); // Giải mã lấy email
@@ -72,9 +79,7 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
             }
         } catch (Exception e) {
             // NẾU TOKEN RÁC, HẾT HẠN, SAI CHỮ KÝ -> Bắt lỗi tại đây!
-            // Ghi log nhẹ nhàng chứ KHÔNG quăng lỗi làm sập hệ thống
             log.warn("Token rejected: {}", e.getMessage());
-            // Hệ thống cứ thế trôi đi tiếp. Lát ra đến SecurityConfig, nếu API thả cửa (/register) thì qua, nếu API cấm thì sẽ bị chặn.
         }
 
         // Chuyển cho màng lọc tiếp theo

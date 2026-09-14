@@ -32,8 +32,21 @@ public class AIService {
     private final RestTemplate restTemplate;
     private final ObjectMapper objectMapper;
 
-    public String generateToeicPart5(Level level, KnowledgeType specificType, String targetWord) {
-        return callGeminiAPI(AIPromptTemplates.buildToeicPart5Prompt(level, specificType, targetWord));
+    // =======================================================
+    // 🚀 HÀM MỚI CHO DEEP DIVE WORKER
+    // =======================================================
+    public String generateDeepDiveRawJson(String prompt) {
+        try {
+            return callGeminiAPI(prompt);
+        } catch (Exception e) {
+            log.error("AI error during VIP Deep Dive generation: {}", e.getMessage(), e);
+            return null;
+        }
+    }
+    // =======================================================
+
+    public String generateToeicPart5(Level level, KnowledgeType specificType, String targetWord, int quantity) {
+        return callGeminiAPI(AIPromptTemplates.buildToeicPart5Prompt(level, specificType, targetWord, quantity));
     }
 
     public String generateToeicPart6Single(Level level, KnowledgeType sm2Type, String sm2TargetWord) {

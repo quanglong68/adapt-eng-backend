@@ -171,7 +171,9 @@ public class DataSyncService {
     @Transactional
     public void generateAndSaveToeicPart5(Level level, KnowledgeItem knowledgeItem, String targetWord, Purpose purpose) {
         KnowledgeType specificType = knowledgeItem != null ? knowledgeItem.getKnowledgeType() : null;
-        String jsonResult = aiService.generateToeicPart5(level, specificType, targetWord);
+
+        // Thêm số 15 vào đây
+        String jsonResult = aiService.generateToeicPart5(level, specificType, targetWord, 15);
 
         if (jsonResult == null || jsonResult.isEmpty()) {
             throw new AIProcessingException("AI không trả về JSON cho TOEIC PART 5");
@@ -213,7 +215,8 @@ public class DataSyncService {
         return question;
     }
 
-    private void saveToeicQuestion(
+    // ĐÃ SỬA: Đổi kiểu trả về từ 'void' thành 'Question'
+    private Question saveToeicQuestion(
             ToeicAIGeneratedDto.ToeicQuestionDto qDto, Level level, ToeicPart toeicPart, Purpose purpose, Passage passage) {
         Question question = new Question();
         question.setLearningTrack(LearningTrack.TOEIC);
@@ -248,7 +251,65 @@ public class DataSyncService {
                     });
             question.setKnowledgeItem(ki);
         }
-        questionRepository.save(question);
+        // ĐÃ SỬA: return lại Question sau khi save
+        return questionRepository.save(question);
+    }
+
+    // =========================================================================
+    // 🚀 HÀM MỚI CHO DEEP DIVE: TÁI SỬ DỤNG HOÀN TOÀN LOGIC CŨ
+    // =========================================================================
+    @Transactional
+    public java.util.List<Long> generateDeepDiveQuestions(Level level, KnowledgeItem knowledgeItem, String targetWord) {
+        KnowledgeType specificType = knowledgeItem != null ? knowledgeItem.getKnowledgeType() : null;
+        boolean isVocabulary = (targetWord != null && !targetWord.trim().isEmpty());
+
+        java.util.List<Long> finalQuestionIds = new java.util.ArrayList<>();
+
+        try {
+            objectMapper.configure(com.fasterxml.jackson.core.JsonParser.Feature.ALLOW_UNQUOTED_CONTROL_CHARS, true);
+
+            // --- BƯỚC 1: GEN PART 5 (10 CÂU HOẶC 6 CÂU TÙY LOẠI) ---
+            int p5Quantity = isVocabulary ? 6 : 10;
+            String p5Json = aiService.generateToeicPart5(level, specificType, targetWord, p5Quantity);
+
+            if (p5Json != null && !p5Json.isEmpty()) {
+                java.util.List<ToeicAIGeneratedDto.ToeicQuestionDto> p5Dtos = objectMapper.readValue(
+                        p5Json, new com.fasterxml.jackson.core.type.TypeReference<java.util.List<ToeicAIGeneratedDto.ToeicQuestionDto>>() {}
+                );
+
+                for (ToeicAIGeneratedDto.ToeicQuestionDto qDto : p5Dtos) {
+                    // TÁI SỬ DỤNG HÀM CŨ Ở ĐÂY, VỪA LƯU VỪA LẤY ĐƯỢC ID
+                    Question savedQ = saveToeicQuestion(qDto, level, ToeicPart.PART_5, Purpose.PRACTICE, null);
+                    finalQuestionIds.add(savedQ.getId());
+                }
+            }
+
+            // --- BƯỚC 2: GEN THÊM PART 6 (CHỈ CHO TỪ VỰNG) ---
+            if (isVocabulary) {
+                String p6Json = aiService.generateToeicPart6Single(level, specificType, targetWord);
+                if (p6Json != null && !p6Json.isEmpty()) {
+                    ToeicAIGeneratedDto p6Dto = objectMapper.readValue(p6Json, ToeicAIGeneratedDto.class);
+
+                    Passage passage = new Passage();
+                    passage.setLearningTrack(LearningTrack.TOEIC);
+                    passage.setSkill(Skill.READING);
+                    passage.setContent(p6Dto.getPassageContent());
+                    passage.setToeicPart(ToeicPart.PART_6);
+                    Passage savedPassage = passageRepository.save(passage);
+
+                    for (ToeicAIGeneratedDto.ToeicQuestionDto qDto : p6Dto.getQuestions()) {
+                        // TÁI SỬ DỤNG HÀM CŨ, TRUYỀN THÊM PASSAGE VÀO
+                        Question savedQ = saveToeicQuestion(qDto, level, ToeicPart.PART_6, Purpose.PRACTICE, savedPassage);
+                        finalQuestionIds.add(savedQ.getId());
+                    }
+                }
+            }
+
+            return finalQuestionIds;
+
+        } catch (Exception e) {
+            throw new AIProcessingException("Lỗi sinh đề Deep Dive: " + e.getMessage(), e);
+        }
     }
 
     private void logSavedQuestion(Question savedQuestion) {
