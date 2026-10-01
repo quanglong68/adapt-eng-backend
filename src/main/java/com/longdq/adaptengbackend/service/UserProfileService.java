@@ -3,7 +3,9 @@ package com.longdq.adaptengbackend.service;
 import com.longdq.adaptengbackend.dto.UserProfileResponseDto;
 import com.longdq.adaptengbackend.entity.User;
 import com.longdq.adaptengbackend.entity.UserSubscription;
+import com.longdq.adaptengbackend.enums.Level;
 import com.longdq.adaptengbackend.enums.SubscriptionStatus;
+import com.longdq.adaptengbackend.repository.UserRepository;
 import com.longdq.adaptengbackend.repository.UserSubscriptionRepository;
 import com.longdq.adaptengbackend.util.SecurityUtils;
 import lombok.RequiredArgsConstructor;
@@ -20,6 +22,7 @@ import java.util.Optional;
 public class UserProfileService {
 
     private final UserSubscriptionRepository userSubscriptionRepository;
+    private final UserRepository userRepository;
 
     @Transactional(readOnly = true)
     public UserProfileResponseDto getCurrentUserProfile() {
@@ -50,9 +53,23 @@ public class UserProfileService {
                 .fullName(user.getFullName())
                 .totalXp(user.getTotalXp())
                 .currentLevel(user.getCurrentLevel())
+                .writingCurrentLevel(user.getWritingCurrentLevel()) // Lấy thêm Level của Writing trả về cho Frontend
                 .isPremium(isPremium)
                 .currentPackageName(packageName)
                 .premiumEndDate(premiumEndDate)
                 .build();
+    }
+
+    @Transactional
+    public void updateWritingLevel(Level level) {
+        User currentUser = SecurityUtils.getCurrentUser();
+        // Lấy từ DB lên để đảm bảo update chính xác
+        User user = userRepository.findById(currentUser.getId())
+                .orElseThrow(() -> new RuntimeException("Không tìm thấy người dùng"));
+
+        user.setWritingCurrentLevel(level);
+        userRepository.save(user);
+
+        log.info("Đã cập nhật writingCurrentLevel thành {} cho user {}", level, user.getEmail());
     }
 }

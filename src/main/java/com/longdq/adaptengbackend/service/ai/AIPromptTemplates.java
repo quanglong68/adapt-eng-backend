@@ -412,4 +412,210 @@ public final class AIPromptTemplates {
             }
             """, wordCount, wordsStr);
     }
+
+    // =================================================================================================
+    // 🚀 BỘ TỪ ĐIỂN CHUẨN HÓA DÀNH RIÊNG CHO WRITING PART 1
+    // =================================================================================================
+    public static String getWritingPart1GrammarRules() {
+        return """
+            [
+              {
+                "knowledgeType": "COORDINATING_CONJUNCTIONS",
+                "knowledgeName": "Liên từ kết hợp (FANBOYS)"
+              },
+              {
+                "knowledgeType": "SUBORDINATING_CONJUNCTIONS",
+                "knowledgeName": "Liên từ phụ thuộc"
+              },
+              {
+                "knowledgeType": "ADVERBIAL_CLAUSES",
+                "knowledgeName": "Mệnh đề trạng ngữ"
+              },
+              {
+                "knowledgeType": "RELATIVE_CLAUSES",
+                "knowledgeName": "Mệnh đề quan hệ"
+              },
+              {
+                "knowledgeType": "PREPOSITIONS_PLACE",
+                "knowledgeName": "Giới từ chỉ vị trí / phương hướng"
+              },
+              {
+                "knowledgeType": "CORRELATIVE_CONJUNCTIONS",
+                "knowledgeName": "Cấu trúc tương quan"
+              },
+              {
+                "knowledgeType": "ADVERBS",
+                "knowledgeName": "Trạng từ chỉ thể cách"
+              },
+              {
+                "knowledgeType": "PRESENT_CONTINUOUS",
+                "knowledgeName": "Thì Hiện tại tiếp diễn"
+              },
+              {
+                "knowledgeType": "PRESENT_SIMPLE",
+                "knowledgeName": "Thì Hiện tại đơn"
+              },
+              {
+                "knowledgeType": "PASSIVE_VOICE",
+                "knowledgeName": "Câu bị động"
+              },
+              {
+                "knowledgeType": "WORD_FORMATION",
+                "knowledgeName": "Cấu tạo từ"
+              },
+              {
+                "knowledgeType": "ARTICLES",
+                "knowledgeName": "Mạo từ"
+              },
+              {
+                "knowledgeType": "SUBJECT_VERB_AGREEMENT",
+                "knowledgeName": "Sự hòa hợp Chủ - Vị"
+              }
+            ]
+            """;
+    }
+
+    // =================================================================================================
+    // 🚀 PROMPT CHO WRITING TEST ĐẦU VÀO (CHẤM ĐIỂM TỰ LUẬN BẰNG GEMINI VISION)
+    // =================================================================================================
+    public static String buildWritingPart1TestGradingPrompt() {
+        // Truyền examIntro = "" để nội dung chỉ dẫn cho AI giữ nguyên 100% như bản gốc
+        return buildWritingPart1GradingPrompt(
+                "",
+                """
+                - Thí sinh được quyền dùng BẤT KỲ ngữ pháp nào họ muốn, miễn là mô tả đúng bức ảnh và sử dụng ĐỦ các từ khóa (givenWords). Tuyệt đối KHÔNG ép thí sinh phải dùng một ngữ pháp cố định. Nếu đề bài truyền lên 'requiredGrammar', hãy phớt lờ nó, tuyệt đối không dùng nó làm tiêu chí chấm.""",
+                "");
+    }
+
+    // =================================================================================================
+    // 🚀 PROMPT CHO WRITING PRACTICE HÀNG NGÀY (CHẤM ĐIỂM TỰ LUẬN BẰNG GEMINI VISION)
+    // Khác với Placement Test: câu bốc từ SM-2 Sẽ có 'requiredGrammar' thật và BẮT BUỘC phải dùng đúng,
+    // dùng sai thì phạt 0 điểm. Câu bốc ngẫu nhiên sẽ có 'requiredGrammar' là null nên chấm tự do.
+    // =================================================================================================
+    public static String buildWritingPart1PracticeGradingPrompt() {
+        return buildWritingPart1GradingPrompt(
+                "Đây là phần luyện tập hàng ngày (Practice). Một số câu được hệ thống bốc theo đúng điểm yếu ngữ pháp của bạn.",
+                """
+                - Xét theo ngữ pháp bắt buộc như sau:
+                  + Nếu 'requiredGrammar' là null: thí sinh được quyền dùng BẤT KỲ ngữ pháp nào họ muốn, miễn là mô tả đúng bức ảnh và sử dụng ĐỦ các từ khóa (givenWords). Tuyệt đối KHÔNG tự ý thêm ngữ pháp bắt buộc nào.
+                  + Nếu 'requiredGrammar' KHÁC null: đây là câu luyện đúng điểm yếu, thí sinh BẮT BUỘC phải dùng đúng cấu trúc ngữ pháp đó trong câu của họ. Nếu câu viết KHÔNG dùng đúng cấu trúc này (kể cả khi ngữ pháp còn lại đều đúng và mô tả đúng tranh) thì BẮT BUỘC cho ĐIỂM 0, tuyệt đối không cho điểm 1, 2 hay 3.
+                  + Nếu 'requiredGrammar' khác null và bạn cho điểm 0, phải nói rõ trong 'feedback' rằng thí sinh đã KHÔNG dùng đúng cấu trúc ngữ pháp bắt buộc nào (kèm tên cấu trúc).""",
+                """
+                3. PHẦN WEAKNESS KHI BỊ ÉP 0 ĐIỂM: Nếu câu bị 0 điểm vì không dùng đúng 'requiredGrammar', hãy đặt 'knowledgeType' và 'knowledgeName' bằng đúng cặp giá trị của 'requiredGrammar' đó (chép từ cẩm nang bên dưới). Điều này giúp hệ thống đẩy lại đúng cấu trúc ngữ pháp vào vòng lặp luyện tập tiếp theo.""");
+    }
+
+    /**
+     * Thân chung cho cả Placement Test và Practice.
+     * Ba tham số cho phép mỗi bên thay đúng phần cần khác nhau, phần còn lại giữ nguyên chung.
+     *
+     * @param examIntro   Câu giới thiệu ngữ cảnh. Truyền "" để giữ nguyên prompt gốc.
+     * @param grammarRule Khối quy tắc xử lý 'requiredGrammar'.
+     * @param extraRules  Quy tắc bổ sung riêng (truyền "" nếu không có).
+     */
+    private static String buildWritingPart1GradingPrompt(
+            String examIntro, String grammarRule, String extraRules) {
+        String dictionary = getWritingPart1GrammarRules();
+
+        return String.format("""
+            Đóng vai một giáo viên chấm thi TOEIC Writing Part 1 cực kỳ khắt khe và tận tâm.
+            Tôi sẽ gửi cho bạn một mảng JSON (inputData) chứa danh sách các câu trả lời của thí sinh. MỖI OBJECT CÓ CHỨA CÁC TỪ KHÓA BẮT BUỘC DÙNG (givenWords).
+            %s
+
+            TIÊU CHÍ CHẤM ĐIỂM (Thang 0 - 3 điểm) - ĐẠO LUẬT THÉP VỀ SỰ TỰ DO NGỮ PHÁP:
+            %s
+            - Điểm 0: Không viết gì, viết những thứ vô nghĩa, sai hoàn toàn ngữ cảnh tranh, hoặc bỏ sót bất kỳ từ khóa nào trong phần 'givenWords'.
+            - Điểm 1: Dùng đủ từ khóa, đúng ý tranh nhưng MẮC CÁC LỖI NGỮ PHÁP NẶNG, NGHIÊM TRỌNG (sai trật tự từ cơ bản, thiếu động từ chính, sai sự hòa hợp chủ vị quá rõ ràng).
+            - Điểm 2: Đúng ý tranh, đúng từ khóa, nhưng câu văn vụng về, mắc lỗi ngữ pháp nhẹ (sai mạo từ, sai giới từ nhẹ, chia thì chưa thật chuẩn xác nhưng vẫn hiểu được).
+            - Điểm 3: Đạt điểm tối đa. Dùng đủ từ khóa, đúng ngữ pháp, mô tả bức ảnh hợp lý và tự nhiên.
+
+            QUY TRÌNH PHÂN TÍCH VÀ ĐƯA FEEDBACK:
+            1. PHẦN FEEDBACK: Nếu điểm DƯỚI 3, phân tích chi tiết lỗi sai của thí sinh. Cung cấp một "Câu gợi ý sửa lại" hoàn chỉnh ở cuối feedback.
+            2. PHẦN WEAKNESS (RẤT QUAN TRỌNG): Nếu câu bị Điểm 0, 1 hoặc 2 do lỗi ngữ pháp, AI tự động chẩn đoán xem thí sinh đang yếu mảng ngữ pháp nào nhất dựa trên câu họ viết sai. So sánh lỗi đó với Cẩm nang Ngữ pháp dạng JSON dưới đây để LẤY CHÍNH XÁC cặp 'knowledgeType' và 'knowledgeName' tương ứng:
+            %s
+            --- BẮT ĐẦU CẨM NANG NGỮ PHÁP ---
+            %s
+            --- KẾT THÚC CẨM NANG NGỮ PHÁP ---
+            %s
+            ĐẦU RA BẮT BUỘC:
+            Trả về DUY NHẤT một mảng JSON (JSON Array), KHÔNG bọc mã markdown (như ```json).
+            Mỗi object trong mảng trả về BẮT BUỘC phải giữ lại chính xác 'questionId' mà tôi gửi trong inputData.
+            Cấu trúc object trả về phải như sau:
+            {
+              "questionId": [Giữ nguyên ID từ inputData],
+              "score": 2,
+              "feedback": "Nhận xét chi tiết các lỗi sai: [Viết câu gợi ý hoàn hảo vào đây].",
+              "weakness": {
+                 "knowledgeType": "COPY CHÍNH XÁC MỘT GIÁ TRỊ TỪ CẨM NANG TRÊN (Ví dụ: ARTICLES). NẾU ĐIỂM 3, HOẶC LỖI SAI LÀ DO THIẾU TỪ KHÓA CHỨ KHÔNG PHẢI LỖI NGỮ PHÁP THÌ BẮT BUỘC ĐỂ null.",
+                 "knowledgeName": "COPY CHÍNH XÁC TÊN TIẾNG VIỆT TỪ CẨM NANG TRÊN TƯƠNG ỨNG VỚI TYPE ĐÓ. ĐỂ null NẾU KNOWLEDGETYPE LÀ null."
+              }
+            }
+            """, examIntro, grammarRule, extraRules, dictionary, "");
+    }
+
+    // =================================================================================================
+    // 🚀 PROMPT CHO AI ĐỂ TỰ ĐỘNG SINH ĐỀ THI TEST WRITING PART 1
+    // =================================================================================================
+    public static String buildWritingPart1TestQuestionGenerationPrompt(Level level, int quantity) {
+        String grammarRules = getWritingPart1GrammarRules();
+
+        return String.format("""
+            Đóng vai chuyên gia ra đề thi TOEIC Writing Part 1. Nhiệm vụ của bạn là tạo ra ĐÚNG %d câu hỏi cho bài kiểm tra đầu vào (Placement Test) của thí sinh trình độ %s.
+            
+            QUY TRÌNH TƯ DUY BẮT BUỘC ĐỂ ĐẢM BẢO SỰ HỢP LÝ:
+            Bước 1: Chọn ngẫu nhiên ĐÚNG MỘT 'knowledgeType' trong Cẩm nang ngữ pháp dưới đây để làm tag phân loại (requiredGrammar).
+            Bước 2: Tưởng tượng ra một bối cảnh bức ảnh (imagePrompt) và 2 từ khóa (givenWords) SAO CHO RẤT DỄ ĐỂ ĐẶT CÂU THEO NGỮ PHÁP ĐÃ CHỌN Ở BƯỚC 1.
+            (Ví dụ: Nếu chọn 'RELATIVE_CLAUSES', hãy tạo ảnh có 1 người nổi bật giữa đám đông kèm từ khóa 'woman, hold' để thí sinh dễ viết 'The woman who is holding...').
+            
+            YÊU CẦU ĐẦU RA CHO MỖI OBJECT:
+            1. 'requiredGrammar': Mã knowledgeType đã chọn ở Bước 1.
+            2. 'givenWords': ĐÚNG 2 từ khóa (động từ, danh từ, trạng từ hoặc giới từ).
+            3. 'imagePrompt': Mô tả ảnh cực chi tiết bằng TIẾNG ANH (dùng làm prompt cho AI vẽ tranh). Bức tranh phải khớp hoàn hảo với 2 từ khóa và ngữ pháp mục tiêu.
+            
+            CẨM NANG NGỮ PHÁP CHO PHÉP:
+            %s
+            
+            ĐẦU RA BẮT BUỘC: 
+            Trả về DUY NHẤT một mảng JSON (JSON Array), KHÔNG bọc mã markdown.
+            [
+              {
+                "requiredGrammar": "RELATIVE_CLAUSES",
+                "givenWords": "woman, hold",
+                "imagePrompt": "A photorealistic image of a business woman holding a red folder, standing in front of other seated colleagues in a meeting room..."
+              }
+            ]
+            """, quantity, level.name(), grammarRules);
+    }
+
+    // =================================================================================================
+    // 🚀 PROMPT CHO AI SINH ĐỀ LUYỆN WRITING PART 1 THEO ĐÚNG 1 NGỮ PHÁP MỤC TIÊU
+    // Dùng cho job quét SM-2: ép AI ra đề xoáy vào điểm ngữ pháp user đang yếu.
+    // Khác bản Test ở chỗ KHÔNG cho AI tự chọn ngữ pháp, mà ép đúng 'targetGrammar'.
+    // =================================================================================================
+    public static String buildWritingPart1GrammarQuestionGenerationPrompt(Level level, String targetGrammar, int quantity) {
+        String grammarRules = getWritingPart1GrammarRules();
+
+        return String.format("""
+            Đóng vai chuyên gia ra đề luyện TOEIC Writing Part 1. Nhiệm vụ của bạn là tạo ra ĐÚNG %d câu hỏi cho thí sinh trình độ %s.
+            
+            TRỌNG TÂM BẮT BUỘC: Tất cả %d câu hỏi phải xoáy vào ĐÚNG MỘT chủ điểm ngữ pháp duy nhất là: '%s'.
+            Bối cảnh ảnh (imagePrompt) và 2 từ khóa (givenWords) của mỗi câu phải được thiết kế sao cho thí sinh BUỘC PHẢI dùng cấu trúc ngữ pháp '%s' mới diễn đạt được tự nhiên.
+            Tuyệt đối không ra đề lệch sang ngữ pháp khác.
+            
+            YÊU CẦU ĐẦU RA CHO MỖI OBJECT:
+            1. 'givenWords': ĐÚNG 2 từ khóa (động từ, danh từ, trạng từ hoặc giới từ).
+            2. 'imagePrompt': Mô tả ảnh cực chi tiết bằng TIẾNG ANH (dùng làm prompt cho AI vẽ tranh). Bức tranh phải khớp hoàn hảo với 2 từ khóa và ngữ pháp mục tiêu.
+            
+            CẨM NANG NGỮ PHÁP THAM KHẢO (để bạn hiểu đúng bản chất của '%s'):
+            %s
+            
+            ĐẦU RA BẮT BUỘC: 
+            Trả về DUY NHẤT một mảng JSON (JSON Array), KHÔNG bọc mã markdown.
+            [
+              {
+                "givenWords": "woman, hold",
+                "imagePrompt": "A photorealistic image of a business woman holding a red folder in a meeting room..."
+              }
+            ]
+            """, quantity, level.name(), quantity, targetGrammar, targetGrammar, targetGrammar, grammarRules);
+    }
 }

@@ -20,20 +20,19 @@ public class WritingQuestion {
 
     @Enumerated(EnumType.STRING)
     @Column(name = "toeic_part", nullable = false)
-    private ToeicPart toeicPart; // Mặc định là WRITING_PART_1
-
-    @Column(name = "image_prompt", columnDefinition = "TEXT")
-    private String imagePrompt; // Lời nhắc AI đã dùng để vẽ ảnh
+    private ToeicPart toeicPart;
 
     @Column(name = "image_url", columnDefinition = "TEXT")
-    private String imageUrl; // Link ảnh thực tế từ Pollinations
+    private String imageUrl;
 
     @Column(name = "given_words")
-    private String givenWords; // Ví dụ: "who, present"
+    private String givenWords;
 
-    @Column(name = "required_grammar")
-    private String requiredGrammar; // Ví dụ: "Mệnh đề quan hệ (Relative Clause)" - Có thể null nếu là câu học mới
+    // ĐÃ XÓA requiredGrammar DẠNG CHUỖI. THAY BẰNG LIÊN KẾT TRỰC TIẾP
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "knowledge_item_id")
+    private KnowledgeItem knowledgeItem;
 
     @Enumerated(EnumType.STRING)
-    private Level level; // Độ khó của bức ảnh/từ vựng (A1-C1)
+    private Level level;
 }

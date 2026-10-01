@@ -18,6 +18,7 @@ public class UserProfileResponseDto {
     private String fullName;
     private int totalXp;
     private Level currentLevel;
+    private Level writingCurrentLevel;
     private boolean isPremium;
     private String currentPackageName;
     private LocalDateTime premiumEndDate;
