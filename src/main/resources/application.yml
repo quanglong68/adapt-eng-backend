@@ -3,36 +3,41 @@ spring:
     name: adapt-eng-backend
 
   datasource:
-    url: jdbc:postgresql://localhost:5432/adapt_eng_db
-    username: postgres
-    password: 123456
+    url: jdbc:postgresql://${DB_HOST:localhost}:${DB_PORT:5432}/${DB_NAME:adapt_eng_db}
+    username: ${DB_USERNAME:postgres}
+    password: ${DB_PASSWORD:123456}
     driver-class-name: org.postgresql.Driver
 
   jpa:
     hibernate:
-      ddl-auto: update
-    show-sql: true
+      ddl-auto: ${JPA_DDL_AUTO:update}
+    show-sql: ${JPA_SHOW_SQL:true}
     properties:
       hibernate:
         dialect: org.hibernate.dialect.PostgreSQLDialect
+
+jwt:
+  secret: ${JWT_SECRET:404E635266556A586E3272357538782F413F4428472B4B6250645367566B5970}
+  expiration-ms: ${JWT_EXPIRATION_MS:86400000}
+
 gemini:
-    api:
-      key: ${GEMINI_API_KEY}
-      url: ${GEMINI_API_URL:https://generativelanguage.googleapis.com/v1beta/models/gemini-3.1-flash-lite:generateContent}
+  api:
+    key: ${GEMINI_API_KEY:}
+    url: ${GEMINI_API_URL:https://generativelanguage.googleapis.com/v1beta/models/gemini-3.1-flash-lite:generateContent}
 
 vnpay:
-  tmn-code: HNJAWPZ8
-  hash-secret: Q78M2SN95OZRMDVJPWIX5FEL37TXG9UL
-  pay-url: https://sandbox.vnpayment.vn/paymentv2/vpcpay.html
-  return-url: http://localhost:5173/payment-result
-  ipn-url: http://localhost:8080/api/v1/payment/vnpay-ipn
+  tmn-code: ${VNPAY_TMN_CODE:HNJAWPZ8}
+  hash-secret: ${VNPAY_HASH_SECRET:Q78M2SN95OZRMDVJPWIX5FEL37TXG9UL}
+  pay-url: ${VNPAY_PAY_URL:https://sandbox.vnpayment.vn/paymentv2/vpcpay.html}
+  return-url: ${VNPAY_RETURN_URL:http://localhost:5173/payment-result}
+  ipn-url: ${VNPAY_IPN_URL:http://localhost:8080/api/v1/payment/vnpay-ipn}
 
 huggingface:
   api:
     key: ${HUGGINGFACE_API_KEY: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}
-    url: https://api-inference.huggingface.co/models/black-forest-labs/FLUX.1-schnell
+    url: ${HUGGINGFACE_API_URL:https://api-inference.huggingface.co/models/black-forest-labs/FLUX.1-schnell}
 
 cloudinary:
-  cloud-name: pywlyhza
-  api-key: 438824919776283
-  api-secret: Mi6y2RAhCRjj32BE7opJ4LSLnaM
+  cloud-name: ${CLOUDINARY_CLOUD_NAME:pywlyhza}
+  api-key: ${CLOUDINARY_API_KEY:438824919776283}
+  api-secret: ${CLOUDINARY_API_SECRET:Mi6y2RAhCRjj32BE7opJ4LSLnaM}

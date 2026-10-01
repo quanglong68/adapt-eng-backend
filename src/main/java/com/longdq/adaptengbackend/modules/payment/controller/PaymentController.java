@@ -1,0 +1,47 @@
+package com.longdq.adaptengbackend.modules.payment.controller;
+
+import com.longdq.adaptengbackend.modules.payment.dto.CreatePaymentUrlRequestDto;
+import com.longdq.adaptengbackend.modules.payment.dto.CreatePaymentUrlResponseDto;
+import com.longdq.adaptengbackend.modules.payment.service.PaymentService;
+import jakarta.validation.Valid;
+import lombok.RequiredArgsConstructor;
+import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.*;
+
+import java.util.List;
+import java.util.Map;
+
+@RestController
+@RequestMapping("/api/v1/payment")
+@RequiredArgsConstructor
+@CrossOrigin(origins = "*")
+public class PaymentController {
+
+    private final PaymentService paymentService;
+
+    @PostMapping("/create-url")
+    public CreatePaymentUrlResponseDto createPaymentUrl(@Valid @RequestBody CreatePaymentUrlRequestDto request) {
+        return paymentService.createPaymentUrl(request);
+    }
+
+    @GetMapping("/vnpay-ipn")
+    public Map<String, String> handleVnpayIpn(@RequestParam Map<String, String> params) {
+        return paymentService.handleVnpayIpn(params);
+    }
+
+    @GetMapping("/vnpay-return")
+    public ResponseEntity<Map<String, Object>> handleVnpayReturn(@RequestParam Map<String, String> params) {
+        return ResponseEntity.ok(paymentService.handleVnpayReturn(params));
+    }
+
+    @PutMapping("/cancel/{transactionId}")
+    public ResponseEntity<Map<String, String>> cancelTransaction(@PathVariable Long transactionId) {
+        paymentService.cancelTransaction(transactionId);
+        return ResponseEntity.ok(Map.of("message", "Hủy giao dịch thành công."));
+    }
+
+    @GetMapping("/history")
+    public ResponseEntity<List<Map<String, Object>>> getTransactionHistory() {
+        return ResponseEntity.ok(paymentService.getTransactionHistory());
+    }
+}
