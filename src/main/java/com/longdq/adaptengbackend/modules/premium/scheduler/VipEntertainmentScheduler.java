@@ -1,6 +1,5 @@
 package com.longdq.adaptengbackend.modules.premium.scheduler;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
 import com.longdq.adaptengbackend.modules.premium.entity.VipDailyEntertainment;
 import com.longdq.adaptengbackend.modules.premium.entity.VipSavedWord;
 import com.longdq.adaptengbackend.common.enums.SubscriptionStatus;
@@ -8,19 +7,16 @@ import com.longdq.adaptengbackend.common.enums.VipSavedWordStatus;
 import com.longdq.adaptengbackend.modules.payment.repository.UserSubscriptionRepository;
 import com.longdq.adaptengbackend.modules.premium.repository.VipDailyEntertainmentRepository;
 import com.longdq.adaptengbackend.modules.premium.repository.VipSavedWordRepository;
-import com.longdq.adaptengbackend.common.ai.AIService;
+import com.longdq.adaptengbackend.modules.premium.service.VipService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.UUID;
-import java.util.stream.Collectors;
-import com.longdq.adaptengbackend.modules.user.entity.User;
 
 @Slf4j
 @Service
@@ -30,8 +26,7 @@ public class VipEntertainmentScheduler {
     private final VipSavedWordRepository vipSavedWordRepository;
     private final VipDailyEntertainmentRepository vipDailyEntertainmentRepository;
     private final UserSubscriptionRepository userSubscriptionRepository;
-    private final AIService aiService;
-    private final ObjectMapper objectMapper;
+    private final VipService vipService;
 
     /**
      * Chạy lúc 2h sáng hàng ngày
@@ -91,7 +86,7 @@ public class VipEntertainmentScheduler {
     }
 
     private void processUserEntertainment(UUID userId) {
-        // Lấy tối đa 10 từ PENDING
+        // Tái dùng lõi sinh đề của VipService (giữ nguyên hành vi job 2h sáng)
         List<VipSavedWord> pendingWords = vipSavedWordRepository
                 .findByUserIdAndStatusOrderByCreatedAtAsc(userId, VipSavedWordStatus.PENDING);
 
@@ -99,46 +94,9 @@ public class VipEntertainmentScheduler {
             return;
         }
 
-        // Lấy tối đa 10 từ
-        List<VipSavedWord> wordsToProcess = pendingWords.size() > 10
-                ? pendingWords.subList(0, 10)
-                : pendingWords;
-
-        List<String> wordList = wordsToProcess.stream()
-                .map(VipSavedWord::getWord)
-                .collect(Collectors.toList());
-
-        // Gọi AIService
-        String geminiResponse = aiService.generateVipEntertainment(wordList);
-
-        if (geminiResponse == null) {
-            log.error("AIService trả về null cho userId {}", userId);
-            return;
+        boolean ok = vipService.generateAndSaveEntertainment(userId, pendingWords);
+        if (ok) {
+            log.info("Đã xử lý đề giải trí cho userId {}.", userId);
         }
-
-        // Validate JSON
-        try {
-            objectMapper.readTree(geminiResponse);
-        } catch (Exception e) {
-            log.error("AIService trả về JSON không hợp lệ cho userId {}: {}", userId, geminiResponse);
-            return;
-        }
-
-        // Lưu vào VipDailyEntertainment
-        VipDailyEntertainment entertainment = new VipDailyEntertainment();
-        entertainment.setUserId(userId);
-        entertainment.setContentJson(geminiResponse);
-        entertainment.setIsCompleted(false);
-        entertainment.setEntertainmentDate(LocalDate.now());
-        entertainment.setCreatedAt(LocalDate.now());
-        vipDailyEntertainmentRepository.save(entertainment);
-
-        // Update các từ đã xử lý thành PROCESSED
-        for (VipSavedWord word : wordsToProcess) {
-            word.setStatus(VipSavedWordStatus.PROCESSED);
-            vipSavedWordRepository.save(word);
-        }
-
-        log.info("Đã xử lý {} từ cho userId {}.", wordsToProcess.size(), userId);
     }
 }

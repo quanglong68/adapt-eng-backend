@@ -10,6 +10,7 @@ import org.springframework.scheduling.annotation.EnableScheduling;
 @EnableAsync
 public class AdaptEngBackendApplication {
 
+
     public static void main(String[] args) {
         SpringApplication.run(AdaptEngBackendApplication.class, args);
     }

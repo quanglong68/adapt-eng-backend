@@ -20,6 +20,8 @@ public interface VipDailyEntertainmentRepository extends JpaRepository<VipDailyE
 
     boolean existsByUserIdAndIsCompletedAndEntertainmentDate(UUID userId, Boolean isCompleted, LocalDate date);
 
+    long countByUserIdAndEntertainmentDate(UUID userId, LocalDate date);
+
     boolean existsByUserIdAndIsCompleted(UUID userId, Boolean isCompleted);
     Optional<VipDailyEntertainment> findFirstByUserIdAndIsCompletedOrderByIdAsc(UUID userId, Boolean isCompleted);
 }
