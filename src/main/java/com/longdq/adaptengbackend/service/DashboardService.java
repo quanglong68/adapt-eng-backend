@@ -9,6 +9,7 @@ import com.longdq.adaptengbackend.repository.DailyTestRecordRepository;
 import com.longdq.adaptengbackend.repository.LevelPromotionConfigRepository;
 import com.longdq.adaptengbackend.repository.UserLearningProgressRepository;
 import com.longdq.adaptengbackend.repository.UserQuestionHistoryRepository;
+import com.longdq.adaptengbackend.repository.WritingTestRecordRepository;
 import com.longdq.adaptengbackend.util.SecurityUtils;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -17,7 +18,9 @@ import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.List;
+import java.util.stream.Stream;
 
 @Service
 @RequiredArgsConstructor
@@ -27,6 +30,7 @@ public class DashboardService {
     private final UserQuestionHistoryRepository historyRepository;
     private final LevelPromotionConfigRepository promotionConfigRepo;
     private final DailyTestRecordRepository recordRepository;
+    private final WritingTestRecordRepository writingRecordRepository;
 
     public DashboardSummaryResponse getDashboardSummary() {
         User user = SecurityUtils.getCurrentUser();
@@ -34,8 +38,15 @@ public class DashboardService {
 
         // ====================================================================
         // 🚨 THUẬT TOÁN STREAK MỚI: CHỈ ĐẾM CÁC NGÀY ĐẠT ĐIỂM >= 10%
+        // Gộp cả luyện tập Reading (daily_test_records) và Writing (writing_test_records)
+        // để user chỉ cần làm bài Writing cũng giữ được chuỗi.
         // ====================================================================
-        List<LocalDate> activeDates = recordRepository.findValidStreakDates(user.getId());
+        List<LocalDate> activeDates = Stream
+                .concat(recordRepository.findValidStreakDates(user.getId()).stream(),
+                        writingRecordRepository.findValidStreakDates(user.getId(), "DAILY_TEST").stream())
+                .distinct()
+                .sorted(Comparator.reverseOrder())
+                .toList();
         int streak = 0;
         LocalDate today = LocalDate.now();
 

@@ -10,6 +10,8 @@ import com.longdq.adaptengbackend.enums.TestRecordStatus;
 import com.longdq.adaptengbackend.enums.ToeicPart;
 import com.longdq.adaptengbackend.enums.Level;
 import com.longdq.adaptengbackend.exception.BusinessException;
+import com.longdq.adaptengbackend.exception.ForbiddenException;
+import com.longdq.adaptengbackend.exception.QuotaExceededException;
 import com.longdq.adaptengbackend.repository.*;
 import com.longdq.adaptengbackend.util.DailyReviewProgressHelper;
 import com.longdq.adaptengbackend.util.KnowledgeDisplayNameUtil;
@@ -98,12 +100,12 @@ public class ToeicPracticeService {
 
                 if (!isVip) {
                     // Ném lỗi BusinessException để FE bắt và hiện UI mua VIP
-                    throw new IllegalArgumentException("REQUIRE_VIP");
+                    throw new ForbiddenException("REQUIRE_VIP");
                 }
 
                 if (completedCount >= 3) {
                     // VIP cũng chỉ được làm 3 đề/ngày
-                    throw new IllegalArgumentException("MAX_LIMIT_REACHED");
+                    throw new QuotaExceededException("MAX_LIMIT_REACHED");
                 }
             }
 

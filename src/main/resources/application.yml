@@ -26,3 +26,13 @@ vnpay:
   pay-url: https://sandbox.vnpayment.vn/paymentv2/vpcpay.html
   return-url: http://localhost:5173/payment-result
   ipn-url: http://localhost:8080/api/v1/payment/vnpay-ipn
+
+huggingface:
+  api:
+    key: ${HUGGINGFACE_API_KEY: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}
+    url: https://api-inference.huggingface.co/models/black-forest-labs/FLUX.1-schnell
+
+cloudinary:
+  cloud-name: pywlyhza
+  api-key: 438824919776283
+  api-secret: Mi6y2RAhCRjj32BE7opJ4LSLnaM

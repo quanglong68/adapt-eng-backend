@@ -1,6 +1,7 @@
 package com.longdq.adaptengbackend.repository;
 
 import com.longdq.adaptengbackend.entity.UserLearningProgress;
+import com.longdq.adaptengbackend.enums.ToeicPart;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
@@ -39,6 +40,19 @@ public interface UserLearningProgressRepository extends JpaRepository<UserLearni
             "LEFT JOIN u.knowledgeItem k " +
             "WHERE u.nextReviewDate <= :date AND u.toeicPart IS NOT NULL")
     List<Object[]> findDistinctToeicItemsForReview(@Param("date") LocalDateTime date);
+
+    // Quét các KnowledgeItem Writing đến hạn ôn tập, kèm trình độ Writing hiện tại của user để biết sinh đề level nào.
+    // Trả về: [0]=knowledgeItem.id (UUID), [1]=knowledgeName (String), [2]=user.writingCurrentLevel (Level)
+    @Query("SELECT DISTINCT u.knowledgeItem.id, k.knowledgeName, u.user.writingCurrentLevel " +
+            "FROM UserLearningProgress u " +
+            "LEFT JOIN u.knowledgeItem k " +
+            "WHERE u.nextReviewDate <= :date " +
+            "AND u.toeicPart = :part " +
+            "AND u.knowledgeItem IS NOT NULL " +
+            "AND u.user.writingCurrentLevel IS NOT NULL")
+    List<Object[]> findDistinctWritingGrammarItemsForReview(
+            @Param("date") LocalDateTime date,
+            @Param("part") ToeicPart part);
     // Đếm số lượng tiến độ học tập đã đến hạn hoặc quá hạn ôn tập của 1 user
     long countByUserIdAndNextReviewDateLessThanEqual(UUID userId, LocalDateTime dateTime);
 

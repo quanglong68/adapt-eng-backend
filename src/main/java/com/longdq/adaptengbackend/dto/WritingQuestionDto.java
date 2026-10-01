@@ -1,11 +1,15 @@
 package com.longdq.adaptengbackend.dto;
 
 import lombok.Data;
+import java.util.UUID;
 
 @Data
 public class WritingQuestionDto {
     private Long questionId;
-    private String imageUrl; // Cho FE hiển thị ảnh
-    private String givenWords; // Ví dụ: "walk, talk"
-    private String requiredGrammar; // Ví dụ: "Mệnh đề quan hệ" (Hiện đỏ lên nhắc nhở user)
+    private String imageUrl;
+    private String givenWords;
+
+    // Đã thay bằng ID để mai mốt trả về tên hiển thị
+    private UUID knowledgeItemId;
+    private String requiredGrammar;
 }
