@@ -1,0 +1,32 @@
+package com.longdq.adaptengbackend.modules.payment.repository;
+
+import com.longdq.adaptengbackend.modules.payment.entity.UserSubscription;
+import com.longdq.adaptengbackend.common.enums.SubscriptionStatus;
+import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.stereotype.Repository;
+
+import java.time.LocalDateTime;
+import java.util.List;
+import java.util.Optional;
+import java.util.UUID;
+
+@Repository
+public interface UserSubscriptionRepository extends JpaRepository<UserSubscription, Long> {
+
+    Optional<UserSubscription> findFirstByUserIdAndStatusAndEndDateGreaterThanOrderByEndDateDesc(
+            UUID userId,
+            SubscriptionStatus status,
+            LocalDateTime now
+    );
+
+    boolean existsByUserIdAndStatusAndEndDateGreaterThan(
+            UUID userId,
+            SubscriptionStatus status,
+            LocalDateTime now
+    );
+
+    List<UserSubscription> findByStatusAndEndDateGreaterThan(
+            SubscriptionStatus status,
+            LocalDateTime now
+    );
+}
