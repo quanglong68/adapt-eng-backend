@@ -53,12 +53,16 @@ public class GlobalExceptionHandler {
         return buildResponse(HttpStatus.UNAUTHORIZED, "Phiên đăng nhập không hợp lệ. Vui lòng đăng nhập lại.", request, null, null);
     }
 
-    // 403 — không đủ quyền
+    // 403 — không đủ quyền. Giữ nguyên message nghiệp vụ (REQUIRE_VIP, REQUIRE_WRITING_PLACEMENT_TEST...)
+    // để FE nhận diện và hiển thị đúng màn hình, thay vì ghi đè message chung chung.
     @ExceptionHandler({AccessDeniedException.class, ForbiddenException.class})
     public ResponseEntity<ErrorResponse> handleForbidden(
             RuntimeException ex, HttpServletRequest request) {
         log.warn("Forbidden at {}: {}", request.getRequestURI(), ex.getMessage());
-        return buildResponse(HttpStatus.FORBIDDEN, "Bạn không có quyền thực hiện thao tác này.", request, null, null);
+        String message = (ex.getMessage() == null || ex.getMessage().isBlank())
+                ? "Bạn không có quyền thực hiện thao tác này."
+                : ex.getMessage();
+        return buildResponse(HttpStatus.FORBIDDEN, message, request, null, null);
     }
 
     // 404 — không tìm thấy user khi đăng nhập

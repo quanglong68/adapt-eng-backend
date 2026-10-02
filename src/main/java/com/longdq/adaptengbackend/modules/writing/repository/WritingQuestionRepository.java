@@ -10,6 +10,7 @@ import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 import com.longdq.adaptengbackend.common.enums.Level;
+import com.longdq.adaptengbackend.common.enums.ToeicPart;
 import com.longdq.adaptengbackend.modules.spacedrepetition.entity.KnowledgeItem;
 import com.longdq.adaptengbackend.modules.toeic.repository.QuestionRepository;
 
@@ -66,4 +67,37 @@ public interface WritingQuestionRepository extends JpaRepository<WritingQuestion
             @Param("userId") UUID userId,
             @Param("pickedQuestionIds") List<Long> pickedQuestionIds,
             @Param("limit") int limit);
+
+    // Đếm tồn kho theo part + level (chỉ để log/monitor, job nightly sinh cố định không phụ thuộc ngưỡng)
+    long countByToeicPartAndLevel(ToeicPart toeicPart, Level level);
+
+    // ==========================================
+    // NHÓM BỐC CÂU LẺ PART 2 / PART 3 CÓ LỌC ANTI-DUP (mirror Part 1)
+    // Dùng khi ráp session 3×P1 + 1×P2 + 1×P3: loại trừ câu user đã làm ở level hiện tại.
+    // ==========================================
+
+    // Lấy 1 câu CHƯA TỪNG LÀM theo part + level
+    @Query(value = "SELECT w.* FROM writing_questions w " +
+            "LEFT JOIN user_writing_question_history uwh ON w.id = uwh.question_id AND uwh.user_id = :userId " +
+            "WHERE w.toeic_part = :part AND w.level = :level " +
+            "AND w.id NOT IN :pickedQuestionIds " +
+            "AND uwh.id IS NULL " +
+            "ORDER BY RANDOM() LIMIT 1", nativeQuery = true)
+    Optional<WritingQuestion> findNewWritingPart23Question(
+            @Param("part") String part,
+            @Param("level") String level,
+            @Param("userId") UUID userId,
+            @Param("pickedQuestionIds") List<Long> pickedQuestionIds);
+
+    // Fallback khi kho cạn: lấy câu làm LÂU NHẤT (LRU) để không block user
+    @Query(value = "SELECT w.* FROM writing_questions w " +
+            "JOIN user_writing_question_history uwh ON w.id = uwh.question_id AND uwh.user_id = :userId " +
+            "WHERE w.toeic_part = :part AND w.level = :level " +
+            "AND w.id NOT IN :pickedQuestionIds " +
+            "ORDER BY uwh.answered_at ASC LIMIT 1", nativeQuery = true)
+    Optional<WritingQuestion> findLruWritingPart23Question(
+            @Param("part") String part,
+            @Param("level") String level,
+            @Param("userId") UUID userId,
+            @Param("pickedQuestionIds") List<Long> pickedQuestionIds);
 }

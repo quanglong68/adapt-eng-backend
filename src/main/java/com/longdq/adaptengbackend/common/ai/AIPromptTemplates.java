@@ -621,4 +621,125 @@ public final class AIPromptTemplates {
             ]
             """, quantity, level.name(), quantity, targetGrammar, targetGrammar, targetGrammar, grammarRules);
     }
+
+    // =================================================================================================
+    // WRITING PART 2 & PART 3: SINH ĐỀ GENERIC CHUẨN ETS (KHÔNG ÉP NGỮ PHÁP)
+    // Đề phải tự nhiên, tái sử dụng được. Constraint SM-2 gắn lúc ráp session, không nhồi vào prompt sinh đề.
+    // =================================================================================================
+    public static String buildWritingPart2GenerationPrompt(Level level) {
+        return String.format("""
+            Bạn là chuyên gia ra đề thi TOEIC Writing của viện khảo thí ETS.
+            Nhiệm vụ của bạn là tạo ra 1 đề thi Part 2: "Respond to a Written Request" bám sát độ khó thực tế, trình độ %s.
+
+            TIÊU CHUẨN ĐỀ BÀI:
+            1. Chủ đề phổ biến: Chăm sóc khách hàng (phàn nàn, đổi trả), Giao tiếp nội bộ công ty (lịch họp, thay đổi chính sách), Hỏi đáp đối tác (báo giá, dịch vụ).
+            2. Format Email phải có đầy đủ: From, To, Date, Subject và Body.
+            3. Phần "Directions" BẮT BUỘC phải đòi hỏi người thi thực hiện 2 hoặc 3 hành động cụ thể (Ví dụ: "Give 2 pieces of information and ask 1 question" hoặc "Make 2 suggestions and provide 1 reason").
+
+            ĐỊNH DẠNG JSON TRẢ VỀ (DUY NHẤT 1 object, KHÔNG bọc markdown):
+            {
+              "email_metadata": {
+                "from": "Tên người gửi",
+                "to": "Tên người nhận",
+                "date": "Ngày tháng",
+                "subject": "Tiêu đề email"
+              },
+              "email_body": "Nội dung bức thư gốc bằng tiếng Anh (khoảng 50-80 từ).",
+              "directions": "Hướng dẫn chi tiết bằng tiếng Anh (Ví dụ: Respond to the email as if you are... In your email, give 2 suggestions and ask 1 question)."
+            }
+            """, level.name());
+    }
+
+    public static String buildWritingPart3GenerationPrompt(Level level) {
+        return String.format("""
+            Bạn là chuyên gia ra đề thi TOEIC Writing của viện khảo thí ETS.
+            Nhiệm vụ của bạn là tạo ra 1 đề thi Part 3: "Write an Opinion Essay" bám sát độ khó thực tế, trình độ %s.
+
+            TIÊU CHUẨN ĐỀ BÀI:
+            1. Độ dài và thời gian: Người thi có 30 phút để viết tối thiểu 300 từ.
+            2. Dạng đề (Chọn ngẫu nhiên 1 trong 3 dạng):
+               - Agree or Disagree (Đồng ý hay không đồng ý với một nhận định).
+               - Preference (Thích lựa chọn nào hơn và tại sao).
+               - Advantages and Disadvantages (Nêu ưu và nhược điểm của một vấn đề).
+            3. Chủ đề thường gặp: Môi trường công sở, Công nghệ, Giao thông, Thói quen mua sắm, Giáo dục.
+
+            ĐỊNH DẠNG JSON TRẢ VỀ (DUY NHẤT 1 object, KHÔNG bọc markdown):
+            {
+              "essay_type": "Agree/Disagree | Preference | Advantages/Disadvantages",
+              "question": "Câu hỏi tự luận bằng tiếng Anh (Ví dụ: Do you agree or disagree with the following statement: ...)",
+              "directions": "Read the question below. You have 30 minutes to plan, write, and revise your essay. Typically, an effective essay will contain a minimum of 300 words."
+            }
+            """, level.name());
+    }
+
+    // =================================================================================================
+    // WRITING PART 2: PROMPT CHẤM ĐA NĂNG (GRADING + CONSTRAINT VALIDATION + WEAKNESS EXTRACTION)
+    // Backend tự trừ điểm phạt dựa trên constraint_results + clamp, AI chỉ đánh giá true/false và score gốc.
+    // =================================================================================================
+    public static String buildWritingPart2GradingPrompt() {
+        String allowedTypes = getAllowedKnowledgeTypes();
+        return """
+            Bạn là Giám khảo chấm thi TOEIC Writing Part 2 (Respond to a Written Request).
+            Nhiệm vụ: Chấm điểm bài viết của học viên, đánh giá ràng buộc bắt buộc, và trích xuất lỗi sai ngữ pháp.
+
+            TIÊU CHÍ CHẤM ĐIỂM ETS (Thang 0-4) — chấm score GỐC, chưa trừ phạt:
+            - 4 điểm: Đáp ứng TẤT CẢ yêu cầu của 'directions' (ví dụ: trả lời đủ 2 suggestions, 1 question). Từ vựng đa dạng, ngữ pháp chính xác, giọng văn phù hợp ngữ cảnh kinh doanh.
+            - 3 điểm: Đáp ứng đủ yêu cầu nhưng từ vựng/ngữ pháp còn một vài lỗi nhỏ không cản trở ý nghĩa.
+            - 2 điểm: Bỏ sót 1 yêu cầu của 'directions' HOẶC lỗi ngữ pháp/từ vựng nhiều làm người đọc khó hiểu.
+            - 1 điểm: Bỏ sót hầu hết yêu cầu, lỗi sai chằng chịt.
+            - 0 điểm: Bỏ trắng, chép lại đề, hoặc viết ngôn ngữ khác.
+
+            DANH SÁCH LỖI NGỮ PHÁP HỢP LỆ (Bắt buộc dùng chính xác text trong danh sách này cho weaknesses và keys của constraint_results):
+            """ + allowedTypes + """
+
+            ĐỊNH DẠNG JSON TRẢ VỀ (DUY NHẤT 1 object, KHÔNG bọc markdown):
+            {
+              "score": <số nguyên từ 0-4>,
+              "feedback": "Nhận xét chi tiết (tiếng Việt). Đánh giá việc hoàn thành 'directions' và giải thích lỗi sai ngữ pháp/từ vựng.",
+              "constraint_results": {
+              },
+              "weaknesses": ["<Lỗi_1>", "<Lỗi_2>"]
+            }
+            QUY TẮC:
+            1. 'constraint_results': key là từng chủ điểm trong REQUIRED_CONSTRAINTS đầu vào, value true nếu học viên dùng ĐỦ và ĐÚNG, false nếu KHÔNG dùng hoặc dùng SAI. Nếu REQUIRED_CONSTRAINTS rỗng thì trả về {}.
+            2. 'weaknesses': trích xuất TỐI ĐA 2 lỗi sai nặng nhất NGOẠI TRỪ các lỗi đã có trong constraint_results. Sai 1 trả 1, không sai trả [].
+            3. KHÔNG tự trừ điểm phạt vào 'score'. Backend sẽ trừ -1 mỗi constraint false (min 0).
+            """;
+    }
+
+    // =================================================================================================
+    // WRITING PART 3: PROMPT CHẤM ĐA NĂNG (thang 0-5 + word_count)
+    // =================================================================================================
+    public static String buildWritingPart3GradingPrompt() {
+        String allowedTypes = getAllowedKnowledgeTypes();
+        return """
+            Bạn là Giám khảo chấm thi TOEIC Writing Part 3 (Write an Opinion Essay).
+            Nhiệm vụ: Chấm điểm bài viết của học viên, đếm từ, đánh giá ràng buộc, và trích xuất lỗi sai.
+
+            TIÊU CHÍ CHẤM ĐIỂM ETS (Thang 0-5) — chấm score GỐC, chưa trừ phạt:
+            - 5 điểm: Lập luận xuất sắc, có Mở - Thân - Kết rõ ràng. Sử dụng linh hoạt từ nối (transitions). Ngữ pháp phức tạp, từ vựng phong phú, minh chứng cụ thể.
+            - 4 điểm: Lập luận tốt nhưng đôi chỗ còn thiếu logic liên kết. Có vài lỗi ngữ pháp nhỏ.
+            - 3 điểm: Trình bày được quan điểm nhưng lý do nông, ví dụ chung chung. Lỗi ngữ pháp lặp lại nhiều.
+            - 2 điểm: Thiếu cấu trúc rõ ràng, sai ngữ pháp trầm trọng, lạc đề một phần.
+            - 1 điểm: Rất kém, không hiểu đề.
+            - 0 điểm: Bỏ trống hoặc lạc đề hoàn toàn.
+
+            DANH SÁCH LỖI NGỮ PHÁP HỢP LỆ:
+            """ + allowedTypes + """
+
+            ĐỊNH DẠNG JSON TRẢ VỀ (DUY NHẤT 1 object, KHÔNG bọc markdown):
+            {
+              "score": <số nguyên từ 0-5>,
+              "word_count": <tổng số từ của bài làm>,
+              "feedback": "Nhận xét chi tiết (tiếng Việt) về cấu trúc, logic, từ vựng, ngữ pháp.",
+              "constraint_results": {
+              },
+              "weaknesses": ["<Lỗi_1>", "<Lỗi_2>", "<Lỗi_3>", "<Lỗi_4>", "<Lỗi_5>"]
+            }
+            QUY TẮC:
+            1. 'constraint_results': như Part 2, tối đa 5 chủ điểm. Rỗng thì {}.
+            2. 'weaknesses': TỐI ĐA 5 lỗi sai mới nặng nhất (không trùng constraints).
+            3. KHÔNG tự trừ điểm (word_count < 300 hay constraint fail). Backend sẽ trừ -1 cho word_count < 300 và -1 mỗi constraint false (min 0).
+            """;
+    }
 }

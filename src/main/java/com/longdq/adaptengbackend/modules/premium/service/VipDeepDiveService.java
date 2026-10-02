@@ -49,13 +49,36 @@ public class VipDeepDiveService {
     private final ObjectMapper objectMapper;
 
     // ==========================================
-    // 1. LẤY TOP 10 ĐIỂM YẾU
+    // 1. LẤY TOP 10 ĐIỂM YẾU (giữ nguyên cho tương thích ngược: không lọc theo kỹ năng)
     // ==========================================
     public List<DeepDiveDto.RecommendationResponse> getTopWeaknesses(UUID userId) {
-        LocalDateTime threshold = LocalDateTime.now().minusHours(48);
+        return getTopWeaknesses(userId, "ALL");
+    }
 
-        List<UserLearningProgress> weaknesses = progressRepository.findTopWeaknessesForDeepDive(
-                userId, threshold, PageRequest.of(0, 10));
+    // Lấy top điểm yếu theo tab kỹ năng: skill = "WRITING" | "READING" | "ALL".
+    // Writing = 3 part WRITING_PART_1/2/3; Reading gom phần còn lại kèm record cũ chưa có part.
+    public List<DeepDiveDto.RecommendationResponse> getTopWeaknesses(UUID userId, String skill) {
+        LocalDateTime threshold = LocalDateTime.now().minusHours(48);
+        PageRequest top10 = PageRequest.of(0, 10);
+
+        List<UserLearningProgress> weaknesses;
+        if ("WRITING".equalsIgnoreCase(skill)) {
+            weaknesses = progressRepository.findTopWeaknessesForDeepDiveByParts(
+                    userId, threshold, List.of(
+                            com.longdq.adaptengbackend.common.enums.ToeicPart.WRITING_PART_1,
+                            com.longdq.adaptengbackend.common.enums.ToeicPart.WRITING_PART_2,
+                            com.longdq.adaptengbackend.common.enums.ToeicPart.WRITING_PART_3),
+                    top10);
+        } else if ("READING".equalsIgnoreCase(skill)) {
+            weaknesses = progressRepository.findTopWeaknessesForDeepDiveExcludingParts(
+                    userId, threshold, List.of(
+                            com.longdq.adaptengbackend.common.enums.ToeicPart.WRITING_PART_1,
+                            com.longdq.adaptengbackend.common.enums.ToeicPart.WRITING_PART_2,
+                            com.longdq.adaptengbackend.common.enums.ToeicPart.WRITING_PART_3),
+                    top10);
+        } else {
+            weaknesses = progressRepository.findTopWeaknessesForDeepDive(userId, threshold, top10);
+        }
 
         return weaknesses.stream().map(w -> {
             UUID kId = w.getKnowledgeItem() != null ? w.getKnowledgeItem().getId() : null;
@@ -72,6 +95,7 @@ public class VipDeepDiveService {
                     .knowledgeName(kName)
                     .easeFactor(w.getEaseFactor())
                     .difficultyLevel(w.getEaseFactor() < 1.8 ? "Rất cao" : "Cao")
+                    .toeicPart(w.getToeicPart() != null ? w.getToeicPart().name() : null)
                     .activeSessionId(activeSession.map(DeepDiveSession::getId).orElse(null))
                     .activeSessionStatus(activeSession.map(s -> s.getStatus().name()).orElse(null))
                     .build();

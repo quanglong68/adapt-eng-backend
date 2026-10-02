@@ -18,11 +18,12 @@ public class VipDeepDiveController {
 
     private final VipDeepDiveService deepDiveService;
 
-    // 1. API: Lấy Top 10 Chủ điểm yếu nhất
+    // 1. API: Lấy Top 10 Chủ điểm yếu nhất (skill = WRITING | READING | ALL)
     @GetMapping("/recommendations")
-    public ResponseEntity<List<DeepDiveDto.RecommendationResponse>> getRecommendations() {
+    public ResponseEntity<List<DeepDiveDto.RecommendationResponse>> getRecommendations(
+            @RequestParam(name = "skill", required = false, defaultValue = "ALL") String skill) {
         UUID userId = SecurityUtils.getCurrentUser().getId();
-        return ResponseEntity.ok(deepDiveService.getTopWeaknesses(userId));
+        return ResponseEntity.ok(deepDiveService.getTopWeaknesses(userId, skill));
     }
 
     // 2. API: Bấm nút "Ôn tập" -> Sinh Session và gọi AI ngầm

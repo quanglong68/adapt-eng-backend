@@ -36,4 +36,33 @@ public class WritingQuestion {
 
     @Enumerated(EnumType.STRING)
     private Level level;
+
+    // === MỞ RỘNG CHO WRITING PART 2 (Email) & PART 3 (Essay) ===
+    // Part 1 dùng image_url + given_words. P2/P3 dùng các cột dưới, để null cho Part 1.
+
+    @Column(name = "email_from")
+    private String emailFrom;
+
+    @Column(name = "email_to")
+    private String emailTo;
+
+    @Column(name = "email_date")
+    private String emailDate;
+
+    @Column(name = "email_subject")
+    private String emailSubject;
+
+    @Column(name = "email_body", columnDefinition = "TEXT")
+    private String emailBody;
+
+    // Hướng dẫn làm bài (directions) dùng chung cho P2/P3
+    @Column(name = "directions", columnDefinition = "TEXT")
+    private String directions;
+
+    // Dạng đề Essay: Agree/Disagree | Preference | Advantages/Disadvantages
+    @Column(name = "essay_type")
+    private String essayType;
+
+    @Column(name = "essay_question", columnDefinition = "TEXT")
+    private String essayQuestion;
 }

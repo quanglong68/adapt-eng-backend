@@ -32,6 +32,7 @@ public class WebMvcConfig implements WebMvcConfigurer {
                         "/api/v1/test/**",
                         "/api/v1/toeic/test/**",
                         "/api/v1/toeic/test/**",      // Khớp ToeicController: Sinh đề và Nộp bài Test đầu vào
+                        "/api/v1/**/admin/**",        // Khớp DevGeneratorController: endpoint mồi đề bằng AI (chỉ tồn tại ở profile dev)
                         "/api/v1/payment/**"          // Khớp PaymentController: VNPAY webhook
 
                 );
