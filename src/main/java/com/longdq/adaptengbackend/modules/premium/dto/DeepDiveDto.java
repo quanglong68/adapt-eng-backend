@@ -16,6 +16,8 @@ public class DeepDiveDto {
         private String knowledgeName;
         private double easeFactor;
         private String difficultyLevel;
+        // Part phát sinh điểm yếu (WRITING_PART_1/2/3, PART_5/6/7_...) để FE tách theo tab kỹ năng
+        private String toeicPart;
         // 🚀 ĐÃ THÊM: 2 trường này để báo cho Frontend biết trạng thái hiện tại của đề
         private UUID activeSessionId;
         private String activeSessionStatus;

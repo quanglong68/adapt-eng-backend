@@ -13,6 +13,14 @@ public class DashboardSummaryResponse {
     private long dailyMissionCount;
     private List<RecentActivityDto> recentActivities;
 
+    // Tách số liệu nhiệm vụ theo kỹ năng để FE hiển thị riêng tab Writing/Reading.
+    // dailyMissionCount giữ nguyên (tổng toàn bộ, tương thích ngược).
+    private long writingMissionCount;
+    private long writingPart1Count;
+    private long writingPart2Count;
+    private long writingPart3Count;
+    private long readingMissionCount;
+
     // 🚨 THÊM FIELD NÀY
     private LevelUpProgressDto levelUpProgress;
 

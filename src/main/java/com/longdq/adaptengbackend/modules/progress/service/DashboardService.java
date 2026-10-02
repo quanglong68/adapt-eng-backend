@@ -5,6 +5,7 @@ import com.longdq.adaptengbackend.modules.progress.entity.LevelPromotionConfig;
 import com.longdq.adaptengbackend.modules.user.entity.User;
 import com.longdq.adaptengbackend.common.enums.Level;
 import com.longdq.adaptengbackend.common.enums.TestRecordStatus;
+import com.longdq.adaptengbackend.common.enums.ToeicPart;
 import com.longdq.adaptengbackend.modules.toeic.repository.DailyTestRecordRepository;
 import com.longdq.adaptengbackend.modules.progress.repository.LevelPromotionConfigRepository;
 import com.longdq.adaptengbackend.modules.spacedrepetition.repository.UserLearningProgressRepository;
@@ -34,7 +35,19 @@ public class DashboardService {
 
     public DashboardSummaryResponse getDashboardSummary() {
         User user = SecurityUtils.getCurrentUser();
-        long dailyMissionCount = progressRepository.countByUserIdAndNextReviewDateLessThanEqual(user.getId(), LocalDateTime.now());
+        LocalDateTime now = LocalDateTime.now();
+        long dailyMissionCount = progressRepository.countByUserIdAndNextReviewDateLessThanEqual(user.getId(), now);
+
+        // Tách số liệu nhiệm vụ theo kỹ năng: Writing đếm riêng từng Part,
+        // Reading = tổng trừ Writing (kèm cả record cũ chưa có toeicPart để khỏi lệch số liệu tổng).
+        long writingPart1Count = progressRepository.countByUserIdAndToeicPartAndNextReviewDateLessThanEqual(
+                user.getId(), ToeicPart.WRITING_PART_1, now);
+        long writingPart2Count = progressRepository.countByUserIdAndToeicPartAndNextReviewDateLessThanEqual(
+                user.getId(), ToeicPart.WRITING_PART_2, now);
+        long writingPart3Count = progressRepository.countByUserIdAndToeicPartAndNextReviewDateLessThanEqual(
+                user.getId(), ToeicPart.WRITING_PART_3, now);
+        long writingMissionCount = writingPart1Count + writingPart2Count + writingPart3Count;
+        long readingMissionCount = Math.max(0, dailyMissionCount - writingMissionCount);
 
         // ====================================================================
         // 🚨 THUẬT TOÁN STREAK MỚI: CHỈ ĐẾM CÁC NGÀY ĐẠT ĐIỂM >= 10%
@@ -140,6 +153,11 @@ public class DashboardService {
                 .streakDays(streak) // Streak đã chuẩn chỉ
                 .totalXP(user.getTotalXp())
                 .dailyMissionCount(dailyMissionCount)
+                .writingMissionCount(writingMissionCount)
+                .writingPart1Count(writingPart1Count)
+                .writingPart2Count(writingPart2Count)
+                .writingPart3Count(writingPart3Count)
+                .readingMissionCount(readingMissionCount)
                 .recentActivities(activities)
                 .levelUpProgress(levelUpProgress)
                 .build();

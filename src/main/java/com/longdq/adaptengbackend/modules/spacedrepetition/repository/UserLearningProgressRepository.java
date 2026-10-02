@@ -58,6 +58,19 @@ public interface UserLearningProgressRepository extends JpaRepository<UserLearni
     // Đếm số lượng tiến độ học tập đã đến hạn hoặc quá hạn ôn tập của 1 user
     long countByUserIdAndNextReviewDateLessThanEqual(UUID userId, LocalDateTime dateTime);
 
+    // Đếm tiến độ đến hạn của 1 user theo từng Part (dùng tách số liệu Writing P1/P2/P3)
+    long countByUserIdAndToeicPartAndNextReviewDateLessThanEqual(
+            UUID userId,
+            ToeicPart toeicPart,
+            LocalDateTime dateTime);
+
+    // Quét chủ điểm Writing P2/P3 đến hạn của 1 user (dùng gắn required_constraints lúc ráp session).
+    // P2 bốc tối đa 2, P3 bốc tối đa 5 — giới hạn bằng Pageable ở tầng service.
+    List<UserLearningProgress> findByUserIdAndToeicPartAndNextReviewDateLessThanEqualOrderByNextReviewDateAsc(
+            UUID userId,
+            ToeicPart toeicPart,
+            LocalDateTime dateTime);
+
     // Thêm hàm này vào UserLearningProgressRepository.java
 
     @org.springframework.data.jpa.repository.Query("SELECT p FROM UserLearningProgress p " +
@@ -69,6 +82,34 @@ public interface UserLearningProgressRepository extends JpaRepository<UserLearni
     java.util.List<UserLearningProgress> findTopWeaknessesForDeepDive(
             @org.springframework.data.repository.query.Param("userId") java.util.UUID userId,
             @org.springframework.data.repository.query.Param("thresholdDate") java.time.LocalDateTime thresholdDate,
+            org.springframework.data.domain.Pageable pageable
+    );
+
+    // Biến thể lọc theo nhóm Part cho tab kỹ năng: Writing (IN 3 part Writing),
+    // Reading gom phần còn lại kèm record cũ chưa có toeicPart (IS NULL).
+    @org.springframework.data.jpa.repository.Query("SELECT p FROM UserLearningProgress p " +
+            "WHERE p.user.id = :userId " +
+            "AND p.easeFactor < 2.5 " +
+            "AND (p.lastReviewDate IS NULL OR p.lastReviewDate < :thresholdDate) " +
+            "AND p.toeicPart IN :parts " +
+            "ORDER BY p.easeFactor ASC")
+    java.util.List<UserLearningProgress> findTopWeaknessesForDeepDiveByParts(
+            @org.springframework.data.repository.query.Param("userId") java.util.UUID userId,
+            @org.springframework.data.repository.query.Param("thresholdDate") java.time.LocalDateTime thresholdDate,
+            @org.springframework.data.repository.query.Param("parts") java.util.Collection<ToeicPart> parts,
+            org.springframework.data.domain.Pageable pageable
+    );
+
+    @org.springframework.data.jpa.repository.Query("SELECT p FROM UserLearningProgress p " +
+            "WHERE p.user.id = :userId " +
+            "AND p.easeFactor < 2.5 " +
+            "AND (p.lastReviewDate IS NULL OR p.lastReviewDate < :thresholdDate) " +
+            "AND (p.toeicPart NOT IN :parts OR p.toeicPart IS NULL) " +
+            "ORDER BY p.easeFactor ASC")
+    java.util.List<UserLearningProgress> findTopWeaknessesForDeepDiveExcludingParts(
+            @org.springframework.data.repository.query.Param("userId") java.util.UUID userId,
+            @org.springframework.data.repository.query.Param("thresholdDate") java.time.LocalDateTime thresholdDate,
+            @org.springframework.data.repository.query.Param("parts") java.util.Collection<ToeicPart> parts,
             org.springframework.data.domain.Pageable pageable
     );
 

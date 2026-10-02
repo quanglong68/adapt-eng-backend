@@ -105,7 +105,7 @@ public class WritingPracticeService {
     private static final long FREE_DAILY_LIMIT = 1;
     private static final long VIP_DAILY_LIMIT = 3;
 
-    private static final int MAX_GRADING_RETRIES = 5;
+    private static final int MAX_GRADING_RETRIES = 3;
     private static final long GRADING_RETRY_DELAY_MS = 10000;
     private static final long GRADING_RETRY_BACKOFF_MS = 2000;
 
@@ -507,7 +507,14 @@ public class WritingPracticeService {
 
             RetryExecutor.executeWithRetry(
                     () -> {
-                        String result = aiService.gradeWritingPart1(finalPrompt, imageUrls);
+                        String result;
+                        try {
+                            // Chấm P1 có xoay model/key khi dính 429, ném lỗi để retry ngoài thử lại
+                            result = aiService.gradeWritingPart1Resilient(
+                                    finalPrompt, imageUrls);
+                        } catch (Exception ex) {
+                            throw new RuntimeException(ex.getMessage(), ex);
+                        }
                         if (result == null || result.trim().isEmpty()) {
                             throw new RuntimeException("AI trả về kết quả rỗng hoặc null, cần thử lại.");
                         }
@@ -525,7 +532,10 @@ public class WritingPracticeService {
 
         String aiResponseJson = aiResponseJsonHolder[0];
         if (aiResponseJson == null || aiResponseJson.isEmpty()) {
-            throw new RuntimeException("AI chấm điểm bị lỗi hoặc timeout, vui lòng thử lại.");
+            // Mọi retry + xoay model/key đều chết: trả 429 rõ ràng thay vì 500,
+            // bài làm không mất (record vẫn IN_PROGRESS, user nộp lại được)
+            throw new QuotaExceededException(
+                    "Hệ thống AI chấm bài đang quá tải (hết quota), vui lòng đợi ít phút rồi nộp lại.");
         }
 
         try {

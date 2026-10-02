@@ -21,6 +21,7 @@ public class PlacementTestInterceptor implements HandlerInterceptor {
         // Dù user chưa có level nào, vẫn phải cho họ gọi API lấy đề thi để làm bài chứ không được chặn!
         String requestURI = request.getRequestURI();
         if (requestURI.contains("/api/v1/auth") ||
+                requestURI.contains("/admin/") ||     // Thả cửa cho endpoint mồi đề AI (DevGeneratorController, chỉ tồn tại ở profile dev)
                 requestURI.contains("/placement-test") || // Thả cửa cho API thi Writing (start & submit)
                 requestURI.contains("/writing-level") ||  // Thả cửa cho API lưu level Writing
                 requestURI.contains("/test/generate") ||  // Thả cửa cho API thi Reading

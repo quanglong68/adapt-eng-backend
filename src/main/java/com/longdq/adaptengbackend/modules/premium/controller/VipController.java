@@ -85,6 +85,11 @@ public class VipController {
         return ResponseEntity.ok(vipService.getEntertainmentStatus());
     }
 
+    @PostMapping("/entertainment/generate")
+    public ResponseEntity<VipActionResponseDto> generateEntertainmentNow() {
+        return ResponseEntity.accepted().body(vipService.requestEntertainmentGeneration());
+    }
+
     @GetMapping("/check-fomo")
     public ResponseEntity<VipFomoResponseDto> checkFomo() {
         return ResponseEntity.ok(vipService.checkFomo());

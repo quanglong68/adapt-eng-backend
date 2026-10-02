@@ -13,7 +13,10 @@ import org.springframework.security.core.userdetails.UsernameNotFoundException;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.web.client.RestTemplate;
+import org.springframework.http.client.SimpleClientHttpRequestFactory;
 import com.longdq.adaptengbackend.modules.user.entity.User;
+
+import java.time.Duration;
 
 @Configuration
 @RequiredArgsConstructor
@@ -27,6 +30,19 @@ public class AppBeansConfig {
 
         return new RestTemplate();
 
+    }
+
+    /**
+     * RestTemplate riêng cho Hugging Face (vẽ ảnh FLUX qua Gradio SSE).
+     * Space cold-start/streaming giữ kết nối rất lâu nên bắt buộc có timeout,
+     * tránh treo thread vô hạn. Không dùng chung bean mặc định để khỏi ảnh hưởng Gemini.
+     */
+    @Bean
+    public RestTemplate huggingFaceRestTemplate() {
+        SimpleClientHttpRequestFactory factory = new SimpleClientHttpRequestFactory();
+        factory.setConnectTimeout(Duration.ofSeconds(10));
+        factory.setReadTimeout(Duration.ofSeconds(120));
+        return new RestTemplate(factory);
     }
 
     // 1. Dạy Spring cách tìm User trong Database

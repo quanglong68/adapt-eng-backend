@@ -1,5 +1,10 @@
 package com.longdq.adaptengbackend.modules.premium.service;
 
+import com.longdq.adaptengbackend.common.ai.AIService;
+import com.longdq.adaptengbackend.common.exception.DuplicateResourceException;
+import com.longdq.adaptengbackend.common.exception.QuotaExceededException;
+import com.longdq.adaptengbackend.common.exception.ValidationException;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.longdq.adaptengbackend.modules.user.entity.User;
 import com.longdq.adaptengbackend.modules.premium.entity.VipDailyEntertainment;
 import com.longdq.adaptengbackend.modules.premium.entity.VipSavedWord;
@@ -36,8 +41,14 @@ public class VipService {
     private final VipSavedWordRepository vipSavedWordRepository;
     private final VipDailyEntertainmentRepository vipDailyEntertainmentRepository;
     private final PremiumCheckUtil premiumCheckUtil;
+    private final AIService aiService;
+    private final ObjectMapper objectMapper;
+    private final EntertainmentGenerationRegistry generationRegistry;
+    private final VipEntertainmentAiWorker entertainmentAiWorker;
 
     private static final int MAX_SAVED_WORDS = 10;
+    private static final int MAX_WORDS_PER_ENTERTAINMENT = 10;
+    private static final int DAILY_GENERATION_QUOTA = 1;
 
     /**
      * Lưu từ vào giỏ từ VIP (Word Cart)
@@ -179,6 +190,96 @@ public class VipService {
             return VipEntertainmentEmptyReason.NO_PENDING_WORDS;
         }
         return VipEntertainmentEmptyReason.WAITING_JOB;
+    }
+
+    /**
+     * Lõi sinh đề dùng chung cho job 2h sáng và nút "Tạo đề ngay".
+     * Gọi AI từ tối đa 10 từ PENDING, lưu đề mới (isCompleted=false),
+     * chuyển các từ đã dùng sang PROCESSED. AI lỗi -> false, không tốn quota.
+     */
+    @Transactional
+    public boolean generateAndSaveEntertainment(UUID userId, List<VipSavedWord> pendingWords) {
+        if (pendingWords == null || pendingWords.isEmpty()) {
+            return false;
+        }
+
+        List<VipSavedWord> wordsToProcess = pendingWords.size() > MAX_WORDS_PER_ENTERTAINMENT
+                ? pendingWords.subList(0, MAX_WORDS_PER_ENTERTAINMENT)
+                : pendingWords;
+
+        List<String> wordList = wordsToProcess.stream()
+                .map(VipSavedWord::getWord)
+                .collect(Collectors.toList());
+
+        String geminiResponse = aiService.generateVipEntertainment(wordList);
+        if (geminiResponse == null) {
+            log.error("AIService trả về null khi sinh đề giải trí cho userId {}", userId);
+            return false;
+        }
+
+        try {
+            objectMapper.readTree(geminiResponse);
+        } catch (Exception e) {
+            log.error("AIService trả về JSON không hợp lệ khi sinh đề giải trí cho userId {}: {}", userId, geminiResponse);
+            return false;
+        }
+
+        VipDailyEntertainment entertainment = new VipDailyEntertainment();
+        entertainment.setUserId(userId);
+        entertainment.setContentJson(geminiResponse);
+        entertainment.setIsCompleted(false);
+        entertainment.setEntertainmentDate(LocalDate.now());
+        entertainment.setCreatedAt(LocalDate.now());
+        vipDailyEntertainmentRepository.save(entertainment);
+
+        for (VipSavedWord word : wordsToProcess) {
+            word.setStatus(VipSavedWordStatus.PROCESSED);
+            vipSavedWordRepository.save(word);
+        }
+
+        log.info("Đã sinh đề giải trí ({} từ) cho userId {}.", wordsToProcess.size(), userId);
+        return true;
+    }
+
+    /**
+     * User bấm "Tạo đề ngay": kiểm tra điều kiện rồi giao cho worker chạy ngầm.
+     * Quota 1 đề/ngày (tính cả đề job 2h đã sinh). Khóa chống spam đến khi có đề.
+     */
+    @Transactional
+    public VipActionResponseDto requestEntertainmentGeneration() {
+        User user = SecurityUtils.getCurrentUser();
+        UUID userId = user.getId();
+
+        if (vipDailyEntertainmentRepository.existsByUserIdAndIsCompleted(userId, false)) {
+            throw new ValidationException("Bạn đang có đề giải trí dở. Hãy hoàn thành trước khi tạo đề mới.");
+        }
+
+        List<VipSavedWord> pendingWords = vipSavedWordRepository
+                .findByUserIdAndStatusOrderByCreatedAtAsc(userId, VipSavedWordStatus.PENDING);
+        if (pendingWords.isEmpty()) {
+            throw new ValidationException("Bạn chưa lưu từ nào nên AI không có nguyên liệu sinh đề.");
+        }
+
+        long todayCount = vipDailyEntertainmentRepository.countByUserIdAndEntertainmentDate(userId, LocalDate.now());
+        if (todayCount >= DAILY_GENERATION_QUOTA) {
+            throw new QuotaExceededException("Hôm nay bạn đã tạo đề giải trí rồi. Hẹn gặp lại sau 2h sáng mai!");
+        }
+
+        if (!generationRegistry.tryAcquire(userId)) {
+            throw new DuplicateResourceException("AI đang sinh đề cho bạn, vui lòng đợi giây lát rồi quay lại.");
+        }
+
+        List<Long> wordIds = pendingWords.stream()
+                .limit(MAX_WORDS_PER_ENTERTAINMENT)
+                .map(VipSavedWord::getId)
+                .collect(Collectors.toList());
+
+        entertainmentAiWorker.generateAsync(userId, wordIds);
+
+        return VipActionResponseDto.builder()
+                .success(true)
+                .message("AI đang sinh đề Tarot cho bạn. Xong sẽ có thông báo ngay!")
+                .build();
     }
 
     /**
